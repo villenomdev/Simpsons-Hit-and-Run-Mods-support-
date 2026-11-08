@@ -30,6 +30,11 @@
 #include "instancedrive.hpp"
 #include "file.hpp"
 
+#if defined(RAD_ANDROID)
+extern bool radSdlDriveGetRedirectedPath( const char* rawFileName, char* outRedirected, size_t outSize );
+extern bool radSdlDriveIsOccluded( const char* rawFileName );
+#endif
+
 //=============================================================================
 // Static Data Defintions
 //=============================================================================
@@ -370,6 +375,26 @@ void radFileSystem::FileOpen
     char driveSpec[ radFileDrivenameMax + 1 ];
     char* filePart = NULL;
     ProcessFileName( pFileName, fullFilename, driveSpec, &filePart );
+
+    char redirectedPart[ radFileFilenameMax + 1 ];
+#if defined(RAD_ANDROID)
+    if( filePart != NULL )
+    {
+        if( radSdlDriveIsOccluded( filePart ) )
+        {
+            *pIRadFile = NULL;
+            return;
+        }
+        if( radSdlDriveGetRedirectedPath( filePart, redirectedPart, sizeof(redirectedPart) ) )
+        {
+            for( char* p = redirectedPart; *p != '\0'; ++p )
+            {
+                if( *p == '/' ) *p = '\\';
+            }
+            filePart = redirectedPart;
+        }
+    }
+#endif
 
     Lock( );
 

@@ -46,6 +46,16 @@ void radSdlDriveFactory( radDrive** ppDrive, const char* driveSpec, radMemoryAll
 
 void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod );
 
+#if defined(RAD_ANDROID)
+bool radSdlDriveGetRedirectedPath( const char* rawFileName, char* outRedirected, size_t outSize );
+bool radSdlDriveIsOccluded( const char* rawFileName );
+bool radSdlDriveFindModFile( const char* rawFileName, char* outPath, size_t outSize );
+#else
+inline bool radSdlDriveGetRedirectedPath( const char*, char*, size_t ) { return false; }
+inline bool radSdlDriveIsOccluded( const char* ) { return false; }
+inline bool radSdlDriveFindModFile( const char*, char*, size_t ) { return false; }
+#endif
+
 /*
 //
 // Constructs a cached version of the SDL drive

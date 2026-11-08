@@ -24,8 +24,17 @@
 #include <mission/charactersheet/charactersheet.h>
 #include <mission/charactersheet/charactersheetmanager.h>
 #include <mission/missionscriptloader.h>
+#include <console/console.h>
 
 #include <string.h>
+#include <string>
+
+#if defined(RAD_ANDROID)
+#include <stdio.h>
+#include <android/log.h>
+#include <radfile/sdl/sdldrive.hpp>
+#define REWARDS_LOGI(...) __android_log_print(ANDROID_LOG_INFO, "SimpsonsHitAndRun", __VA_ARGS__)
+#endif
 
 //******************************************************************************
 //
@@ -166,6 +175,92 @@ void RewardsManager::ClearRewards()
 void RewardsManager::OnProcessRequestsComplete( void* pUserData )
 {
     mScriptLoaded = true;
+
+#if defined(RAD_ANDROID)
+    char luaPath[1024];
+    if( radSdlDriveFindModFile( "Resources/scripts/missions/rewards.lua", luaPath, sizeof(luaPath) ) )
+    {
+        REWARDS_LOGI("[Rewards] Found mod rewards.lua at '%s', applying overrides...", luaPath);
+        FILE* fp = fopen( luaPath, "r" );
+        if( fp != NULL )
+        {
+            char lineBuf[512];
+            bool inBlockComment = false;
+            while( fgets( lineBuf, sizeof(lineBuf), fp ) != NULL )
+            {
+                std::string line( lineBuf );
+                size_t start = line.find_first_not_of( " \t\r\n" );
+                if( start == std::string::npos )
+                {
+                    continue;
+                }
+                line = line.substr( start );
+
+                if( inBlockComment )
+                {
+                    size_t endComment = line.find( "]]" );
+                    if( endComment != std::string::npos )
+                    {
+                        inBlockComment = false;
+                        line = line.substr( endComment + 2 );
+                        start = line.find_first_not_of( " \t\r\n" );
+                        if( start == std::string::npos )
+                        {
+                            continue;
+                        }
+                        line = line.substr( start );
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                }
+                if( line.find( "--[[" ) == 0 )
+                {
+                    inBlockComment = true;
+                    continue;
+                }
+                if( line.find( "--" ) == 0 )
+                {
+                    continue;
+                }
+
+                size_t gamePos = line.find( "Game." );
+                if( gamePos != std::string::npos )
+                {
+                    line.erase( gamePos, 5 );
+                }
+
+                size_t last = line.find_last_not_of( " \t\r\n" );
+                if( last == std::string::npos )
+                {
+                    continue;
+                }
+                line = line.substr( 0, last + 1 );
+
+                bool inQuotes = false;
+                for( size_t c = 0; c < line.size(); ++c )
+                {
+                    if( line[c] == '"' ) inQuotes = !inQuotes;
+                    else if( inQuotes && line[c] == '/' ) line[c] = '\\';
+                }
+
+                if( !line.empty() && line[line.size() - 1] != ';' )
+                {
+                    line.push_back( ';' );
+                }
+
+                if( !line.empty() )
+                {
+                    REWARDS_LOGI("[Rewards] Evaluating override: %s", line.c_str());
+                    GetConsole()->Evaluate( line.c_str(), "rewards.lua" );
+                }
+            }
+            fclose( fp );
+            REWARDS_LOGI("[Rewards] Mod rewards.lua processing complete.");
+        }
+    }
+#endif
 }
 
 

@@ -46,6 +46,9 @@
 #include <dirent.h>
 #include <vector>
 #include <strings.h>
+#include <fnmatch.h>
+#include <fstream>
+#include <algorithm>
 #endif
 
 
@@ -79,6 +82,362 @@ static std::vector<std::string> s_DiscoveredModFoldersFallback;
 static bool s_PrimaryModFoldersScanned = false;
 static bool s_FallbackModFoldersScanned = false;
 
+struct ModPathRedirection
+{
+    std::string pattern;
+    std::string target;
+};
+
+static std::vector<ModPathRedirection> s_ModPathRedirections;
+static std::vector<std::string> s_ModOccludedPaths;
+static bool s_ModIniParsed = false;
+static int s_ModIniScanAttempts = 0;
+
+static std::string Trim( const std::string& str )
+{
+    size_t first = str.find_first_not_of( " \t\r\n" );
+    if( first == std::string::npos ) return "";
+    size_t last = str.find_last_not_of( " \t\r\n" );
+    return str.substr( first, ( last - first + 1 ) );
+}
+
+static std::string NormalizeModPath( const std::string& p )
+{
+    std::string res;
+    for( size_t i = 0; i < p.size(); ++i )
+    {
+        if( p[i] == '\\' ) res.push_back( '/' );
+        else res.push_back( p[i] );
+    }
+    while( !res.empty() && ( res[0] == '/' || res[0] == '.' ) )
+    {
+        res.erase( 0, 1 );
+    }
+    return res;
+}
+
+static void ParseCustomFilesIni( const char* iniPath )
+{
+    std::ifstream file( iniPath );
+    if( !file.is_open() )
+    {
+        return;
+    }
+
+    std::string line;
+    int currentSection = 0; // 1: PathRedirections, 2: Miscellaneous
+
+    while( std::getline( file, line ) )
+    {
+        std::string trimmed = Trim( line );
+        if( trimmed.empty() || trimmed[0] == ';' || trimmed[0] == '#' )
+        {
+            continue;
+        }
+
+        if( trimmed[0] == '[' && trimmed[trimmed.size() - 1] == ']' )
+        {
+            std::string sectionName = trimmed.substr( 1, trimmed.size() - 2 );
+            if( strcasecmp( sectionName.c_str(), "PathRedirections" ) == 0 )
+            {
+                currentSection = 1;
+            }
+            else if( strcasecmp( sectionName.c_str(), "Miscellaneous" ) == 0 )
+            {
+                currentSection = 2;
+            }
+            else
+            {
+                currentSection = 0;
+            }
+            continue;
+        }
+
+        if( currentSection == 1 ) // [PathRedirections]
+        {
+            size_t eqPos = trimmed.find( '=' );
+            if( eqPos != std::string::npos )
+            {
+                std::string key = Trim( trimmed.substr( 0, eqPos ) );
+                std::string val = Trim( trimmed.substr( eqPos + 1 ) );
+                size_t cPos = val.find( ';' );
+                if( cPos != std::string::npos ) val = Trim( val.substr( 0, cPos ) );
+                cPos = val.find( '#' );
+                if( cPos != std::string::npos ) val = Trim( val.substr( 0, cPos ) );
+
+                if( !key.empty() && !val.empty() )
+                {
+                    ModPathRedirection red;
+                    red.pattern = NormalizeModPath( key );
+                    red.target = NormalizeModPath( val );
+                    s_ModPathRedirections.push_back( red );
+                    LOGI("[Mods] Loaded redirection: '%s' -> '%s'", red.pattern.c_str(), red.target.c_str());
+                }
+            }
+        }
+        else if( currentSection == 2 ) // [Miscellaneous]
+        {
+            size_t eqPos = trimmed.find( '=' );
+            if( eqPos != std::string::npos )
+            {
+                std::string key = Trim( trimmed.substr( 0, eqPos ) );
+                std::string val = Trim( trimmed.substr( eqPos + 1 ) );
+                size_t cPos = val.find( ';' );
+                if( cPos != std::string::npos ) val = Trim( val.substr( 0, cPos ) );
+                cPos = val.find( '#' );
+                if( cPos != std::string::npos ) val = Trim( val.substr( 0, cPos ) );
+
+                if( strcasecmp( key.c_str(), "OccludedPath" ) == 0 && !val.empty() )
+                {
+                    std::string occ = NormalizeModPath( val );
+                    s_ModOccludedPaths.push_back( occ );
+                    LOGI("[Mods] Loaded occluded path: '%s'", occ.c_str());
+                }
+            }
+        }
+    }
+}
+
+static bool CheckPathRedirection( const char* cleanFileName, std::string& outRedirected )
+{
+    std::string current = cleanFileName;
+    bool anyRedirected = false;
+
+    for( int hop = 0; hop < 8; ++hop )
+    {
+        std::string norm = NormalizeModPath( current );
+        bool hopFound = false;
+        std::string nextTarget;
+
+        for( size_t i = 0; i < s_ModPathRedirections.size(); ++i )
+        {
+            const auto& r = s_ModPathRedirections[i];
+            if( strcasecmp( norm.c_str(), r.pattern.c_str() ) == 0 )
+            {
+                nextTarget = r.target;
+                hopFound = true;
+                break;
+            }
+            if( r.pattern.find( '*' ) != std::string::npos || r.pattern.find( '?' ) != std::string::npos )
+            {
+                if( fnmatch( r.pattern.c_str(), norm.c_str(), FNM_CASEFOLD ) == 0 )
+                {
+                    size_t patStar = r.pattern.find( '*' );
+                    size_t tgtStar = r.target.find( '*' );
+                    if( tgtStar == std::string::npos || patStar == std::string::npos )
+                    {
+                        nextTarget = r.target;
+                        hopFound = true;
+                        break;
+                    }
+                    std::string prefix = r.pattern.substr( 0, patStar );
+                    std::string suffix = r.pattern.substr( patStar + 1 );
+                    if( norm.size() >= prefix.size() + suffix.size() )
+                    {
+                        std::string matched = norm.substr( prefix.size(), norm.size() - prefix.size() - suffix.size() );
+                        nextTarget = r.target.substr( 0, tgtStar ) + matched + r.target.substr( tgtStar + 1 );
+                        hopFound = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if( hopFound && nextTarget != current )
+        {
+            current = nextTarget;
+            anyRedirected = true;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    if( anyRedirected )
+    {
+        outRedirected = current;
+        return true;
+    }
+    return false;
+}
+
+static bool CheckModCandidate( const char* basePath, const char* subPath, const char* cleanFileName, char* outPath, size_t outSize );
+
+static void ScanModFolderForIni( const char* modsDir, const char* folder )
+{
+    if( modsDir == NULL || modsDir[0] == '\0' ) return;
+    char iniPath[1024];
+    if( folder && folder[0] != '\0' )
+    {
+        if( CheckModCandidate( modsDir, folder, "CustomFiles.ini", iniPath, sizeof(iniPath) ) )
+        {
+            LOGI("[Mods] Found CustomFiles.ini: '%s'", iniPath);
+            ParseCustomFilesIni( iniPath );
+            return;
+        }
+        char nested[512];
+        snprintf( nested, sizeof(nested), "%s/%s", folder, folder );
+        if( CheckModCandidate( modsDir, nested, "CustomFiles.ini", iniPath, sizeof(iniPath) ) )
+        {
+            LOGI("[Mods] Found nested CustomFiles.ini: '%s'", iniPath);
+            ParseCustomFilesIni( iniPath );
+            return;
+        }
+    }
+    else
+    {
+        if( CheckModCandidate( modsDir, NULL, "CustomFiles.ini", iniPath, sizeof(iniPath) ) )
+        {
+            LOGI("[Mods] Found root CustomFiles.ini: '%s'", iniPath);
+            ParseCustomFilesIni( iniPath );
+            return;
+        }
+    }
+}
+
+static void EnsureModIniLoaded()
+{
+    if( s_ModIniParsed || !s_ModsEnabled )
+    {
+        return;
+    }
+
+    if( !s_PrimaryModFoldersScanned && s_ModsDirectory[0] != '\0' )
+    {
+        s_DiscoveredModFoldersPrimary.clear();
+        DIR* dir = opendir( s_ModsDirectory );
+        if( dir != NULL )
+        {
+            struct dirent* ent;
+            while( ( ent = readdir( dir ) ) != NULL )
+            {
+                if( ent->d_name[0] == '.' ) continue;
+                char fullDir[1024];
+                snprintf( fullDir, sizeof(fullDir), "%s/%s", s_ModsDirectory, ent->d_name );
+                struct stat entSt;
+                if( stat( fullDir, &entSt ) == 0 && S_ISDIR( entSt.st_mode ) )
+                {
+                    if( strcasecmp( ent->d_name, "CustomFiles" ) != 0 && strcasecmp( ent->d_name, "AdditionalFiles" ) != 0 )
+                    {
+                        s_DiscoveredModFoldersPrimary.push_back( ent->d_name );
+                    }
+                }
+            }
+            closedir( dir );
+        }
+        s_PrimaryModFoldersScanned = true;
+    }
+
+    if( s_ActiveMod[0] != '\0' && strcmp( s_ActiveMod, "none" ) != 0 )
+    {
+        ScanModFolderForIni( s_ModsDirectory, s_ActiveMod );
+    }
+
+    ScanModFolderForIni( s_ModsDirectory, NULL );
+
+    for( size_t i = 0; i < s_DiscoveredModFoldersPrimary.size(); ++i )
+    {
+        ScanModFolderForIni( s_ModsDirectory, s_DiscoveredModFoldersPrimary[i].c_str() );
+    }
+
+    const char* legacyDir = "/storage/emulated/0/simpsons_mods";
+    if( strcmp( s_ModsDirectory, legacyDir ) != 0 )
+    {
+        if( !s_FallbackModFoldersScanned )
+        {
+            s_DiscoveredModFoldersFallback.clear();
+            DIR* dir = opendir( legacyDir );
+            if( dir != NULL )
+            {
+                struct dirent* ent;
+                while( ( ent = readdir( dir ) ) != NULL )
+                {
+                    if( ent->d_name[0] == '.' ) continue;
+                    char fullDir[1024];
+                    snprintf( fullDir, sizeof(fullDir), "%s/%s", legacyDir, ent->d_name );
+                    struct stat entSt;
+                    if( stat( fullDir, &entSt ) == 0 && S_ISDIR( entSt.st_mode ) )
+                    {
+                        if( strcasecmp( ent->d_name, "CustomFiles" ) != 0 && strcasecmp( ent->d_name, "AdditionalFiles" ) != 0 )
+                        {
+                            s_DiscoveredModFoldersFallback.push_back( ent->d_name );
+                        }
+                    }
+                }
+                closedir( dir );
+            }
+            s_FallbackModFoldersScanned = true;
+        }
+
+        ScanModFolderForIni( legacyDir, NULL );
+        for( size_t i = 0; i < s_DiscoveredModFoldersFallback.size(); ++i )
+        {
+            ScanModFolderForIni( legacyDir, s_DiscoveredModFoldersFallback[i].c_str() );
+        }
+    }
+
+    if( !s_ModPathRedirections.empty() || !s_ModOccludedPaths.empty() || ++s_ModIniScanAttempts >= 5 )
+    {
+        s_ModIniParsed = true;
+    }
+}
+
+bool radSdlDriveGetRedirectedPath( const char* rawFileName, char* outRedirected, size_t outSize )
+{
+    if( !s_ModsEnabled || rawFileName == NULL || rawFileName[0] == '\0' || outRedirected == NULL || outSize == 0 )
+    {
+        return false;
+    }
+
+    EnsureModIniLoaded();
+
+    if( s_ModPathRedirections.empty() )
+    {
+        return false;
+    }
+
+    std::string redirected;
+    if( CheckPathRedirection( rawFileName, redirected ) )
+    {
+        strncpy( outRedirected, redirected.c_str(), outSize - 1 );
+        outRedirected[ outSize - 1 ] = '\0';
+        LOGI("[Mods] radSdlDriveGetRedirectedPath: '%s' -> '%s'", rawFileName, outRedirected);
+        return true;
+    }
+
+    return false;
+}
+
+bool radSdlDriveIsOccluded( const char* rawFileName )
+{
+    if( !s_ModsEnabled || rawFileName == NULL || rawFileName[0] == '\0' )
+    {
+        return false;
+    }
+
+    EnsureModIniLoaded();
+
+    if( s_ModOccludedPaths.empty() )
+    {
+        return false;
+    }
+
+    std::string norm = NormalizeModPath( rawFileName );
+    for( size_t i = 0; i < s_ModOccludedPaths.size(); ++i )
+    {
+        const auto& occ = s_ModOccludedPaths[i];
+        if( strcasecmp( norm.c_str(), occ.c_str() ) == 0 ||
+            fnmatch( occ.c_str(), norm.c_str(), FNM_CASEFOLD ) == 0 )
+        {
+            LOGI("[Mods] radSdlDriveIsOccluded: BLOCKED '%s' (matched '%s')", rawFileName, occ.c_str());
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static char s_FallbackGameDir[512] = "";
 
 void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod )
@@ -96,6 +455,10 @@ void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* ac
     }
     s_PrimaryModFoldersScanned = false;
     s_FallbackModFoldersScanned = false;
+    s_ModIniParsed = false;
+    s_ModIniScanAttempts = 0;
+    s_ModPathRedirections.clear();
+    s_ModOccludedPaths.clear();
     LOGI("[Mods] Config updated: enabled=%d, dir='%s', active_mod='%s'",
          s_ModsEnabled ? 1 : 0, s_ModsDirectory, s_ActiveMod);
 }
@@ -216,7 +579,15 @@ static bool SearchModInDirectory( const char* modsDir,
             return true;
         }
 
-        // 1b. Check <mods_dir>/<active_mod>/<file>
+        // 1b. Check <mods_dir>/<active_mod>/AdditionalFiles/<file>
+        char addSub[512];
+        snprintf( addSub, sizeof(addSub), "%s/AdditionalFiles", s_ActiveMod );
+        if( CheckModCandidate( modsDir, addSub, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+
+        // 1c. Check <mods_dir>/<active_mod>/<file>
         if( CheckModCandidate( modsDir, s_ActiveMod, cname, outPath, outSize ) )
         {
             return true;
@@ -229,13 +600,19 @@ static bool SearchModInDirectory( const char* modsDir,
         return true;
     }
 
-    // 3. Check root of mods_directory directly
+    // 3. Check root of mods_directory with AdditionalFiles
+    if( CheckModCandidate( modsDir, "AdditionalFiles", cname, outPath, outSize ) )
+    {
+        return true;
+    }
+
+    // 4. Check root of mods_directory directly
     if( CheckModCandidate( modsDir, NULL, cname, outPath, outSize ) )
     {
         return true;
     }
 
-    // 4. Auto-discover mod subfolders in mods_directory (e.g. unzipped folders)
+    // 5. Auto-discover mod subfolders in mods_directory (e.g. unzipped folders)
     if( !scannedFlag )
     {
         discoveredFolders.clear();
@@ -254,7 +631,7 @@ static bool SearchModInDirectory( const char* modsDir,
                 struct stat entSt;
                 if( stat( fullDir, &entSt ) == 0 && S_ISDIR( entSt.st_mode ) )
                 {
-                    if( strcasecmp( ent->d_name, "CustomFiles" ) != 0 )
+                    if( strcasecmp( ent->d_name, "CustomFiles" ) != 0 && strcasecmp( ent->d_name, "AdditionalFiles" ) != 0 )
                     {
                         discoveredFolders.push_back( ent->d_name );
                         LOGI("[Mods] Auto-discovered mod directory in '%s': '%s'", modsDir, ent->d_name);
@@ -286,6 +663,22 @@ static bool SearchModInDirectory( const char* modsDir,
             return true;
         }
 
+        // Check <mods_dir>/<folder>/AdditionalFiles/<file>
+        char addSub[512];
+        snprintf( addSub, sizeof(addSub), "%s/AdditionalFiles", folder );
+        if( CheckModCandidate( modsDir, addSub, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+
+        // Check <mods_dir>/<folder>/<folder>/AdditionalFiles/<file>
+        char nestedAddSub[512];
+        snprintf( nestedAddSub, sizeof(nestedAddSub), "%s/%s/AdditionalFiles", folder, folder );
+        if( CheckModCandidate( modsDir, nestedAddSub, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+
         // Check <mods_dir>/<folder>/<file>
         if( CheckModCandidate( modsDir, folder, cname, outPath, outSize ) )
         {
@@ -303,6 +696,8 @@ static bool FindModFile( const char* rawFileName, char* outPath, size_t outSize 
         return false;
     }
 
+    EnsureModIniLoaded();
+
     // Normalize slashes and remove leading drive or slashes
     std::string cleanName( rawFileName );
     std::replace( cleanName.begin(), cleanName.end(), '\\', '/' );
@@ -316,7 +711,20 @@ static bool FindModFile( const char* rawFileName, char* outPath, size_t outSize 
         return false;
     }
 
-    const char* cname = cleanName.c_str();
+    if( radSdlDriveIsOccluded( cleanName.c_str() ) )
+    {
+        return false;
+    }
+
+    std::string redirected;
+    std::string targetName = cleanName;
+    if( CheckPathRedirection( cleanName.c_str(), redirected ) )
+    {
+        targetName = redirected;
+        LOGI("[Mods] Path redirection in FindModFile: '%s' -> '%s'", cleanName.c_str(), targetName.c_str());
+    }
+
+    const char* cname = targetName.c_str();
 
     // 1. Check primary configured mods directory (default: /storage/emulated/0/Simpsons Hit and Run/mods)
     if( SearchModInDirectory( s_ModsDirectory, s_DiscoveredModFoldersPrimary, s_PrimaryModFoldersScanned, cname, outPath, outSize ) )
@@ -334,7 +742,29 @@ static bool FindModFile( const char* rawFileName, char* outPath, size_t outSize 
         }
     }
 
+    // 3. If redirected, also attempt searching the unredirected original cleanName as fallback
+    if( targetName != cleanName )
+    {
+        const char* origName = cleanName.c_str();
+        if( SearchModInDirectory( s_ModsDirectory, s_DiscoveredModFoldersPrimary, s_PrimaryModFoldersScanned, origName, outPath, outSize ) )
+        {
+            return true;
+        }
+        if( strcmp( s_ModsDirectory, legacyDir ) != 0 )
+        {
+            if( SearchModInDirectory( legacyDir, s_DiscoveredModFoldersFallback, s_FallbackModFoldersScanned, origName, outPath, outSize ) )
+            {
+                return true;
+            }
+        }
+    }
+
     return false;
+}
+
+bool radSdlDriveFindModFile( const char* rawFileName, char* outPath, size_t outSize )
+{
+    return FindModFile( rawFileName, outPath, outSize );
 }
 
 static bool CheckFallbackGamePath( const char* rawFileName, char* outPath, size_t outSize )
