@@ -43,6 +43,9 @@
 #include <string.h>     // strerror()
 #include <sys/stat.h>   // stat()
 #include <SDL_system.h>
+#include <dirent.h>
+#include <vector>
+#include <strings.h>
 #endif
 
 
@@ -71,6 +74,8 @@ static void LogPathStatus(const char* label, const char* path)
 static bool s_ModsEnabled = true;
 static char s_ModsDirectory[512] = "/storage/emulated/0/simpsons_mods";
 static char s_ActiveMod[256] = "";
+static std::vector<std::string> s_DiscoveredModFolders;
+static bool s_ModFoldersScanned = false;
 
 void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod )
 {
@@ -85,6 +90,7 @@ void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* ac
         strncpy( s_ActiveMod, activeMod, sizeof( s_ActiveMod ) - 1 );
         s_ActiveMod[ sizeof( s_ActiveMod ) - 1 ] = '\0';
     }
+    s_ModFoldersScanned = false;
     LOGI("[Mods] Config updated: enabled=%d, dir='%s', active_mod='%s'",
          s_ModsEnabled ? 1 : 0, s_ModsDirectory, s_ActiveMod);
 }
@@ -101,6 +107,7 @@ static bool CheckModCandidate( const char* basePath, const char* subPath, const 
         snprintf( candidate, sizeof(candidate), "%s/%s", basePath, cleanFileName );
     }
 
+    // 1. Fast path: direct exact case access
     if( access( candidate, R_OK ) == 0 )
     {
         struct stat st;
@@ -111,6 +118,67 @@ static bool CheckModCandidate( const char* basePath, const char* subPath, const 
             return true;
         }
     }
+
+    // 2. Fallback: Case-insensitive path resolution for Android Linux filesystem
+    std::string current = basePath;
+    if( subPath && subPath[0] != '\0' )
+    {
+        current += "/";
+        current += subPath;
+    }
+
+    std::string rel = cleanFileName;
+    size_t start = 0;
+    while( start < rel.size() )
+    {
+        size_t next = rel.find( '/', start );
+        std::string part = ( next == std::string::npos ) ? rel.substr( start ) : rel.substr( start, next - start );
+        start = ( next == std::string::npos ) ? rel.size() : next + 1;
+        if( part.empty() || part == "." ) continue;
+
+        std::string nextCandidate = current + "/" + part;
+        struct stat st;
+        if( stat( nextCandidate.c_str(), &st ) == 0 )
+        {
+            current = nextCandidate;
+            continue;
+        }
+
+        // Search directory current case-insensitively
+        DIR* dir = opendir( current.c_str() );
+        if( !dir )
+        {
+            return false;
+        }
+
+        struct dirent* entry;
+        bool found = false;
+        while( ( entry = readdir( dir ) ) != NULL )
+        {
+            if( strcasecmp( entry->d_name, part.c_str() ) == 0 )
+            {
+                current += "/";
+                current += entry->d_name;
+                found = true;
+                break;
+            }
+        }
+        closedir( dir );
+
+        if( !found )
+        {
+            return false;
+        }
+    }
+
+    struct stat finalSt;
+    if( stat( current.c_str(), &finalSt ) == 0 && !S_ISDIR( finalSt.st_mode ) )
+    {
+        strncpy( outPath, current.c_str(), outSize - 1 );
+        outPath[ outSize - 1 ] = '\0';
+        return true;
+    }
+
     return false;
 }
 
@@ -164,6 +232,64 @@ static bool FindModFile( const char* rawFileName, char* outPath, size_t outSize 
     if( CheckModCandidate( s_ModsDirectory, NULL, cname, outPath, outSize ) )
     {
         return true;
+    }
+
+    // 4. Auto-discover mod subfolders in mods_directory (e.g. unzipped folders)
+    if( !s_ModFoldersScanned )
+    {
+        s_DiscoveredModFolders.clear();
+        DIR* dir = opendir( s_ModsDirectory );
+        if( dir != NULL )
+        {
+            struct dirent* ent;
+            while( ( ent = readdir( dir ) ) != NULL )
+            {
+                if( ent->d_name[0] == '.' )
+                {
+                    continue;
+                }
+                char fullDir[1024];
+                snprintf( fullDir, sizeof(fullDir), "%s/%s", s_ModsDirectory, ent->d_name );
+                struct stat st;
+                if( stat( fullDir, &st ) == 0 && S_ISDIR( st.st_mode ) )
+                {
+                    if( strcasecmp( ent->d_name, "CustomFiles" ) != 0 )
+                    {
+                        s_DiscoveredModFolders.push_back( ent->d_name );
+                        LOGI("[Mods] Auto-discovered mod directory: '%s'", ent->d_name);
+                    }
+                }
+            }
+            closedir( dir );
+        }
+        s_ModFoldersScanned = true;
+    }
+
+    for( size_t i = 0; i < s_DiscoveredModFolders.size(); ++i )
+    {
+        const char* folder = s_DiscoveredModFolders[i].c_str();
+
+        // Check <mods_dir>/<folder>/CustomFiles/<file>
+        char sub[512];
+        snprintf( sub, sizeof(sub), "%s/CustomFiles", folder );
+        if( CheckModCandidate( s_ModsDirectory, sub, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+
+        // Check <mods_dir>/<folder>/<folder>/CustomFiles/<file> (double folder extraction)
+        char nestedSub[512];
+        snprintf( nestedSub, sizeof(nestedSub), "%s/%s/CustomFiles", folder, folder );
+        if( CheckModCandidate( s_ModsDirectory, nestedSub, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+
+        // Check <mods_dir>/<folder>/<file>
+        if( CheckModCandidate( s_ModsDirectory, folder, cname, outPath, outSize ) )
+        {
+            return true;
+        }
     }
 
     return false;
