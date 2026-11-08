@@ -588,13 +588,13 @@ void SoundNucleusServiceClipLoad( void )
             }
             case ClipLoadState_LoadingClip:
             {
-                if ( IRadSoundClip::Initialized == gClipLoadInfo.pClip->GetState( ) )
+                if ( gClipLoadInfo.pClip == NULL || IRadSoundClip::NoFile == gClipLoadInfo.pClip->GetState( ) )
                 {
+                    rReleasePrintf( "SoundNucleusServiceClipLoad: IRadSoundClip failed/NoFile loading clip\n" );
                     gClipLoadInfo.state = ClipLoadState_Done;
                 }
-                else if ( IRadSoundClip::Error == gClipLoadInfo.pClip->GetState( ) )
+                else if ( IRadSoundClip::Initialized == gClipLoadInfo.pClip->GetState( ) )
                 {
-                    rReleasePrintf( "SoundNucleusServiceClipLoad: IRadSoundClip error loading clip\n" );
                     gClipLoadInfo.state = ClipLoadState_Done;
                 }
                 
