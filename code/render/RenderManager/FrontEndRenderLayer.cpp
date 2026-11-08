@@ -222,6 +222,9 @@ void FrontEndRenderLayer::Render()
             continue;
         }
 
+        // GUI layer should never accumulate or activate scene lights
+        mpView[ view ]->RemoveAllLights();
+
         mpView[ view ]->BeginRender();
 
         if( !fmvPlaying )
@@ -294,6 +297,9 @@ void FrontEndRenderLayer::Render()
         {
             continue;
         }
+
+        // GUI layer should never accumulate or activate scene lights
+        mpView[ view ]->RemoveAllLights();
 
         mpView[ view ]->BeginRender();
 

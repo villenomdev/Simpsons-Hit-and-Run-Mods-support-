@@ -179,8 +179,19 @@ void tView::BeginRender()
     int lightHandle = 0;
     for(int i=0; i < MAX_VIEW_LIGHTS; i++)
     {
-        if(activeLightList[i])
-            activeLightList[i]->Activate(lightHandle++);
+        tLight* pLight = activeLightList[i];
+        if(pLight)
+        {
+            uintptr_t addr = reinterpret_cast<uintptr_t>(pLight);
+            if((addr & 0x7) == 0 && addr >= 0x10000 && addr < 0x00007fffffffffffULL)
+            {
+                pLight->Activate(lightHandle++);
+            }
+            else
+            {
+                activeLightList[i] = NULL;
+            }
+        }
     }
 
     p3d::stack->Pop();

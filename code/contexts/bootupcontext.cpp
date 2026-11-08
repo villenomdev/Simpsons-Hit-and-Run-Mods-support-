@@ -378,6 +378,18 @@ void BootupContext::OnStop( ContextEnum nextContext )
     // release GUI bootup
     GetGuiSystem()->HandleMessage( GUI_MSG_RELEASE_BOOTUP );
 
+    RenderLayer* guiLayer = GetRenderManager()->mpLayer( RenderEnums::GUI );
+    if( guiLayer != NULL )
+    {
+        for( unsigned int i = 0; i < guiLayer->GetNumViews(); i++ )
+        {
+            if( guiLayer->pView( i ) != NULL )
+            {
+                guiLayer->pView( i )->RemoveAllLights();
+            }
+        }
+    }
+
 #if defined( RAD_PC ) && defined( SHOW_MOVIES )
     GetInputManager()->GetFEMouse()->SetInGameMode( false );
 #endif
@@ -563,8 +575,18 @@ void BootupContext::OnPresentationEventEnd( PresentationEvent* pEvent )
 {
     if( GetPresentationManager()->IsQueueEmpty() )
     {
-		
-        GetRenderManager()->mpLayer( RenderEnums::GUI )->Warm();
+        RenderLayer* guiLayer = GetRenderManager()->mpLayer( RenderEnums::GUI );
+        if( guiLayer != NULL )
+        {
+            for( unsigned int i = 0; i < guiLayer->GetNumViews(); i++ )
+            {
+                if( guiLayer->pView( i ) != NULL )
+                {
+                    guiLayer->pView( i )->RemoveAllLights();
+                }
+            }
+            guiLayer->Warm();
+        }
         // Switch to frontend context.
         GetGameFlow()->SetContext( CONTEXT_FRONTEND );
     }

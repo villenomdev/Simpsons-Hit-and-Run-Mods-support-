@@ -35,6 +35,8 @@
 #include <data/gamedatamanager.h>
 
 #include <worldsim/coins/coinmanager.h>
+#include <render/RenderManager/RenderManager.h>
+#include <render/RenderManager/RenderLayer.h>
 
 //******************************************************************************
 //
@@ -126,6 +128,18 @@ void FrontEndContext::OnStart( ContextEnum previousContext )
     SetMemoryIdentification( "FEContext" );
     MEMTRACK_PUSH_FLAG( "Front End" );
 
+    RenderLayer* guiLayer = GetRenderManager()->mpLayer( RenderEnums::GUI );
+    if( guiLayer != NULL )
+    {
+        for( unsigned int i = 0; i < guiLayer->GetNumViews(); i++ )
+        {
+            if( guiLayer->pView( i ) != NULL )
+            {
+                guiLayer->pView( i )->RemoveAllLights();
+            }
+        }
+    }
+
     HeapMgr()->PushHeap( GMA_LEVEL_FE );
 
     if( previousContext != CONTEXT_BOOTUP )
@@ -181,6 +195,18 @@ void FrontEndContext::OnStop( ContextEnum nextContext )
 
     // release GUI frontend
     GetGuiSystem()->HandleMessage( GUI_MSG_RELEASE_FRONTEND );
+
+    RenderLayer* guiLayer = GetRenderManager()->mpLayer( RenderEnums::GUI );
+    if( guiLayer != NULL )
+    {
+        for( unsigned int i = 0; i < guiLayer->GetNumViews(); i++ )
+        {
+            if( guiLayer->pView( i ) != NULL )
+            {
+                guiLayer->pView( i )->RemoveAllLights();
+            }
+        }
+    }
 
     //
     // Notify the sound system that the front end is stopping

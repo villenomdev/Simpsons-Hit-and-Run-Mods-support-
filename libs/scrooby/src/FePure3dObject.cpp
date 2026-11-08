@@ -359,42 +359,7 @@ void FePure3dObject::Render()
             }
         }
 
-        rAssert( drawable != NULL );
-        if( drawable != NULL )
-        {
-            sg::Scenegraph* scene = p3d::find<sg::Scenegraph>( drawable->GetUID() );
-            if( scene != NULL && scene->GetRoot() != NULL )
-            {
-                // add any light groups found under scenegraph root
-                //
-                sg::LightGroupIterator it( scene );
-                for( it.First(); !it.IsDone(); it.Next() )
-                {
-                    tLightGroup* lightGroup = it.GetLightGroup()->GetLights();
-                    if( lightGroup != NULL )
-                    {
-                        // add each light in light group to current view
-                        //
-                        for( int i = 0; i < lightGroup->GetNumLights(); i++ )
-                        {
-                            if( m_numLightsAdded >= MAX_NUM_LIGHTS )
-                            {
-                                break;
-                            }
-                            tLight* pLight = lightGroup->GetLight( i );
-                            if( pLight != NULL )
-                            {
-                                unsigned int handle = m_View->AddLight( pLight );
-                                if( handle != 0xffffffff && handle < MAX_NUM_LIGHTS )
-                                {
-                                    m_lightsAdded[ m_numLightsAdded++ ] = handle;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // rAssert( drawable != NULL );
 
         if( GetCamera() == NULL )
         {
@@ -411,17 +376,6 @@ void FePure3dObject::Render()
             if( multiController != NULL )
             {
                 SetMultiController( multiController );
-            }
-        }
-
-        // add default light, if exists
-        //
-        if( m_DefaultLight != NULL && m_numLightsAdded < MAX_NUM_LIGHTS )
-        {
-            unsigned int handle = m_View->AddLight( m_DefaultLight );
-            if( handle != 0xffffffff && handle < MAX_NUM_LIGHTS )
-            {
-                m_lightsAdded[ m_numLightsAdded++ ] = handle;
             }
         }
     }
@@ -540,7 +494,48 @@ void FePure3dObject::Render()
         sg::Scenegraph* sgDrawable = dynamic_cast<sg::Scenegraph*>( m_RuntimeDrawable );
         if( sgDrawable == NULL || sgDrawable->GetRoot() != NULL )
         {
+            tLight* activatedLights[ MAX_NUM_LIGHTS ];
+            unsigned int numActivated = 0;
+
+            if( sgDrawable != NULL )
+            {
+                sg::LightGroupIterator it( sgDrawable );
+                for( it.First(); !it.IsDone() && numActivated < MAX_NUM_LIGHTS; it.Next() )
+                {
+                    if( it.GetLightGroup() != NULL )
+                    {
+                        tLightGroup* lightGroup = it.GetLightGroup()->GetLights();
+                        if( lightGroup != NULL )
+                        {
+                            for( int i = 0; i < lightGroup->GetNumLights() && numActivated < MAX_NUM_LIGHTS; i++ )
+                            {
+                                tLight* pLight = lightGroup->GetLight( i );
+                                if( pLight != NULL )
+                                {
+                                    pLight->Activate( numActivated );
+                                    activatedLights[ numActivated++ ] = pLight;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if( m_DefaultLight != NULL && numActivated < MAX_NUM_LIGHTS )
+            {
+                m_DefaultLight->Activate( numActivated );
+                activatedLights[ numActivated++ ] = m_DefaultLight;
+            }
+
             m_RuntimeDrawable->Display();
+
+            for( unsigned int i = 0; i < numActivated; i++ )
+            {
+                if( activatedLights[ i ] != NULL )
+                {
+                    activatedLights[ i ]->Deactivate();
+                }
+            }
         }
     }
 
