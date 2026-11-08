@@ -439,10 +439,12 @@ bool radSdlDriveIsOccluded( const char* rawFileName )
 }
 
 static char s_FallbackGameDir[512] = "";
+static bool s_SafeFrontend = false;
 
-void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod )
+void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod, bool safeFrontend )
 {
     s_ModsEnabled = enabled;
+    s_SafeFrontend = safeFrontend;
     if( modsDir != NULL && modsDir[ 0 ] != '\0' )
     {
         strncpy( s_ModsDirectory, modsDir, sizeof( s_ModsDirectory ) - 1 );
@@ -459,8 +461,8 @@ void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* ac
     s_ModIniScanAttempts = 0;
     s_ModPathRedirections.clear();
     s_ModOccludedPaths.clear();
-    LOGI("[Mods] Config updated: enabled=%d, dir='%s', active_mod='%s'",
-         s_ModsEnabled ? 1 : 0, s_ModsDirectory, s_ActiveMod);
+    LOGI("[Mods] Config updated: enabled=%d, dir='%s', active_mod='%s', safe_frontend=%d",
+         s_ModsEnabled ? 1 : 0, s_ModsDirectory, s_ActiveMod, s_SafeFrontend ? 1 : 0);
 }
 
 static bool CheckModCandidate( const char* basePath, const char* subPath, const char* cleanFileName, char* outPath, size_t outSize )
@@ -711,6 +713,17 @@ static bool FindModFile( const char* rawFileName, char* outPath, size_t outSize 
         return false;
     }
 
+    if( s_SafeFrontend )
+    {
+        if( strcasecmp( cleanName.c_str(), "art/frontend/scrooby/frontend.p3d" ) == 0 ||
+            strcasecmp( cleanName.c_str(), "art/frontend/frontend.p3d" ) == 0 ||
+            strcasecmp( cleanName.c_str(), "art/frontend/scrooby/bootup.p3d" ) == 0 )
+        {
+            LOGI("[Mods] Safe Frontend: bypassing mod menu asset '%s'", cleanName.c_str());
+            return false;
+        }
+    }
+
     if( radSdlDriveIsOccluded( cleanName.c_str() ) )
     {
         return false;
@@ -830,7 +843,7 @@ static bool DirectoryHasGameFiles( const char* dirPath )
     return hasFiles;
 }
 #else
-void radSdlDriveSetModsConfig( bool, const char*, const char* ) {}
+void radSdlDriveSetModsConfig( bool, const char*, const char*, bool ) {}
 #endif
 
 

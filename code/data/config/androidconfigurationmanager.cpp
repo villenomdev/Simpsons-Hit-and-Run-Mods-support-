@@ -9,9 +9,9 @@
     #include <errno.h>
     #include <unistd.h>
 
-extern void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod );
+extern void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod, bool safeFrontend = false );
 #else
-void radSdlDriveSetModsConfig( bool, const char*, const char* ) {}
+void radSdlDriveSetModsConfig( bool, const char*, const char*, bool = false ) {}
 #endif
 
 namespace
@@ -45,6 +45,7 @@ AndroidConfigurationManager::AndroidConfigurationManager()
     m_gamepadVibration( true ),
     m_phoneVibration( false ),
     m_enableMods( true ),
+    m_safeFrontend( false ),
     m_dirty( false )
 {
     strncpy( m_modsPath, "/storage/emulated/0/Simpsons Hit and Run/mods", sizeof( m_modsPath ) );
@@ -64,6 +65,7 @@ void AndroidConfigurationManager::SetDefaults()
     m_gamepadVibration = true;
     m_phoneVibration = false;
     m_enableMods = true;
+    m_safeFrontend = false;
     strncpy( m_modsPath, "/storage/emulated/0/Simpsons Hit and Run/mods", sizeof( m_modsPath ) );
     m_modsPath[ sizeof( m_modsPath ) - 1 ] = '\0';
     m_activeMod[ 0 ] = '\0';
@@ -100,7 +102,7 @@ void AndroidConfigurationManager::Initialize()
     mkdir( m_modsPath, 0777 );
 
     // Update radSdlDrive with mods settings
-    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod );
+    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod, m_safeFrontend );
 
     //
     // If the file does not exist, or the version is old/missing,
@@ -205,6 +207,11 @@ bool AndroidConfigurationManager::IsModsEnabled() const
     return m_enableMods;
 }
 
+bool AndroidConfigurationManager::IsSafeFrontendEnabled() const
+{
+    return m_safeFrontend;
+}
+
 const char* AndroidConfigurationManager::GetModsPath() const
 {
     return m_modsPath;
@@ -223,7 +230,18 @@ void AndroidConfigurationManager::SetModsEnabled( bool enabled )
     }
     m_enableMods = enabled;
     m_dirty = true;
-    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod );
+    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod, m_safeFrontend );
+}
+
+void AndroidConfigurationManager::SetSafeFrontendEnabled( bool enabled )
+{
+    if( m_safeFrontend == enabled )
+    {
+        return;
+    }
+    m_safeFrontend = enabled;
+    m_dirty = true;
+    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod, m_safeFrontend );
 }
 
 void AndroidConfigurationManager::SetModsPath( const char* path )
@@ -235,7 +253,7 @@ void AndroidConfigurationManager::SetModsPath( const char* path )
     strncpy( m_modsPath, path, sizeof( m_modsPath ) - 1 );
     m_modsPath[ sizeof( m_modsPath ) - 1 ] = '\0';
     m_dirty = true;
-    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod );
+    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod, m_safeFrontend );
 }
 
 void AndroidConfigurationManager::SetActiveMod( const char* modName )
@@ -247,7 +265,7 @@ void AndroidConfigurationManager::SetActiveMod( const char* modName )
     strncpy( m_activeMod, modName, sizeof( m_activeMod ) - 1 );
     m_activeMod[ sizeof( m_activeMod ) - 1 ] = '\0';
     m_dirty = true;
-    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod );
+    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod, m_safeFrontend );
 }
 
 #if defined(RAD_ANDROID)
@@ -409,6 +427,8 @@ void AndroidConfigurationManager::WriteConfigurationFile()
     fprintf( file, "# ------------------------------------------------------------\n" );
     fprintf( file, "# enable_mods: true/false (load mods and loose files)\n" );
     fprintf( file, "enable_mods=%s\n", m_enableMods ? "true" : "false" );
+    fprintf( file, "# safe_frontend: true/false (uses original game main menu, avoids mod frontend crashes)\n" );
+    fprintf( file, "safe_frontend=%s\n", m_safeFrontend ? "true" : "false" );
     fprintf( file, "# mods_directory: Folder path on internal storage for mods (default: /storage/emulated/0/Simpsons Hit and Run/mods)\n" );
     fprintf( file, "mods_directory=%s\n", m_modsPath );
     fprintf( file, "# active_mod: Name of active mod folder (leave empty for auto-discovery)\n" );
@@ -525,6 +545,10 @@ void AndroidConfigurationManager::ParseLine( const char* line )
     else if( strcmp( key, "enable_mods" ) == 0 )
     {
         m_enableMods = this->ParseBool( value, m_enableMods );
+    }
+    else if( strcmp( key, "safe_frontend" ) == 0 )
+    {
+        m_safeFrontend = this->ParseBool( value, m_safeFrontend );
     }
     else if( strcmp( key, "mods_directory" ) == 0 || strcmp( key, "mods_path" ) == 0 )
     {
