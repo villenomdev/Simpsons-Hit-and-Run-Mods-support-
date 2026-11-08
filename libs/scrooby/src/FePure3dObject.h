@@ -31,7 +31,7 @@ class tLight;
 class PascalCString;
 class tCamera;
 
-const unsigned int MAX_NUM_LIGHTS = 8;
+const unsigned int MAX_NUM_LIGHTS = 32;
 
 //===========================================================================
 // Interface Definitions

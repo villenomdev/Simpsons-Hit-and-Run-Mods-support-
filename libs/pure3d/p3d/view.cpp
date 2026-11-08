@@ -84,14 +84,27 @@ void tView::SetAmbientLight(tColour colour)
 
 unsigned tView::AddLight(tLight* light)
 {
+    if( light == NULL )
+    {
+        return 0xffffffff;
+    }
     rAssert( light != NULL );
+
+    for(int i = 0; i < MAX_VIEW_LIGHTS; i++)
+    {
+        if(activeLightList[i] == light)
+        {
+            return (unsigned)i;
+        }
+    }
+
     for(int i = 0; i < MAX_VIEW_LIGHTS; i++)
     {
         if(!activeLightList[i])
         {
             light->AddRef();
             activeLightList[i] = light;
-            return i;
+            return (unsigned)i;
         }
     }
     return 0xffffffff;
@@ -99,6 +112,10 @@ unsigned tView::AddLight(tLight* light)
 
 void tView::RemoveLight(unsigned i)
 {
+    if( i >= MAX_VIEW_LIGHTS )
+    {
+        return;
+    }
     tRefCounted::Release(activeLightList[i]);
 }
 
@@ -112,6 +129,10 @@ void tView::RemoveAllLights()
 
 tLight* tView::GetLight(unsigned l)
 {
+    if( l >= MAX_VIEW_LIGHTS )
+    {
+        return NULL;
+    }
     P3DASSERT(l < MAX_VIEW_LIGHTS);
     return activeLightList[l];
 }
@@ -119,6 +140,10 @@ tLight* tView::GetLight(unsigned l)
 //-------------------------------------------------------------------
 void tView::BeginRender()
 {
+    if( camera == NULL )
+    {
+        return;
+    }
     P3DASSERT(camera);
     pddiRect viewRect(int(l * p3d::display->GetWidth()), 
                             int(t * p3d::display->GetHeight()), 

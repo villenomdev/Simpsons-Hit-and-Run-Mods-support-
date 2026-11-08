@@ -100,9 +100,12 @@ FePure3dObject::~FePure3dObject()
     //
     for( unsigned int i = 0; i < m_numLightsAdded; i++ )
     {
-        rAssert( m_View != NULL );
-        m_View->RemoveLight( m_lightsAdded[ i ] );
+        if( m_View != NULL && m_lightsAdded[ i ] < MAX_NUM_LIGHTS )
+        {
+            m_View->RemoveLight( m_lightsAdded[ i ] );
+        }
     }
+    m_numLightsAdded = 0;
 
     if( m_DefaultLight != NULL )
     {
@@ -312,11 +315,19 @@ void FePure3dObject::Render()
     // get the current view window
     //
     tView* currentView = p3d::context->GetView();
+    if( currentView == NULL )
+    {
+        return;
+    }
     rAssert( currentView );
 
     // get the original camera
     //
     tCamera* originalCamera = currentView->GetCamera();
+    if( originalCamera == NULL )
+    {
+        return;
+    }
     originalCamera->AddRef();
 
     if( !m_alreadyRendered )
@@ -361,9 +372,19 @@ void FePure3dObject::Render()
                     //
                     for( int i = 0; i < lightGroup->GetNumLights(); i++ )
                     {
-                        rAssert( m_numLightsAdded < MAX_NUM_LIGHTS );
-                        m_lightsAdded[ m_numLightsAdded ] = m_View->AddLight( lightGroup->GetLight( i ) );
-                        m_numLightsAdded++;
+                        if( m_numLightsAdded >= MAX_NUM_LIGHTS )
+                        {
+                            break;
+                        }
+                        tLight* pLight = lightGroup->GetLight( i );
+                        if( pLight != NULL )
+                        {
+                            unsigned int handle = m_View->AddLight( pLight );
+                            if( handle != 0xffffffff && handle < MAX_NUM_LIGHTS )
+                            {
+                                m_lightsAdded[ m_numLightsAdded++ ] = handle;
+                            }
+                        }
                     }
                 }
             }
@@ -389,11 +410,13 @@ void FePure3dObject::Render()
 
         // add default light, if exists
         //
-        if( m_DefaultLight != NULL )
+        if( m_DefaultLight != NULL && m_numLightsAdded < MAX_NUM_LIGHTS )
         {
-            rAssert( m_numLightsAdded < MAX_NUM_LIGHTS );
-            m_lightsAdded[ m_numLightsAdded ] = m_View->AddLight( m_DefaultLight );
-            m_numLightsAdded++;
+            unsigned int handle = m_View->AddLight( m_DefaultLight );
+            if( handle != 0xffffffff && handle < MAX_NUM_LIGHTS )
+            {
+                m_lightsAdded[ m_numLightsAdded++ ] = handle;
+            }
         }
     }
 

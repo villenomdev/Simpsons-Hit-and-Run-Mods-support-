@@ -217,7 +217,7 @@ void FrontEndRenderLayer::Render()
 
         // nuevos cambios
 
-        if( mpView[ view ] == NULL )
+        if( mpView[ view ] == NULL || mpView[ view ]->GetCamera() == NULL )
         {
             continue;
         }
@@ -290,7 +290,7 @@ void FrontEndRenderLayer::Render()
     {
         rAssert( !IsDead() );
 
-        if( mpView[ view ] == NULL )
+        if( mpView[ view ] == NULL || mpView[ view ]->GetCamera() == NULL )
         {
             continue;
         }
