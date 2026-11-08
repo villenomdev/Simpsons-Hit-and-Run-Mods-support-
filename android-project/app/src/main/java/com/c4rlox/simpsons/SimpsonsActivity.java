@@ -50,12 +50,6 @@ public class SimpsonsActivity extends SDLActivity {
             } else {
                 Log.i(TAG, "mods directory exists: " + modsDir.getAbsolutePath());
             }
-
-            // Legacy directory backward compatibility
-            File legacyModsDir = new File(Environment.getExternalStorageDirectory(), "simpsons_mods");
-            if (!legacyModsDir.exists()) {
-                legacyModsDir.mkdirs();
-            }
         } catch (Exception e) {
             Log.e(TAG, "Failed to create storage directories", e);
         }

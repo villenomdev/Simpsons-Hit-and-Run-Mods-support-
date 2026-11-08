@@ -61,6 +61,10 @@ void Reward::SetFilename(char* file)
 
 void Reward::UnlockReward()
 {
+    if( this == NULL )
+    {
+        return;
+    }
     mEarned = true;
     if( mRewardType == Reward::ALT_PLAYERCAR )
     {

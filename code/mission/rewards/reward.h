@@ -104,6 +104,10 @@ inline char* Reward::GetName ()
 
 inline void Reward::LockReward ()
     {
+        if( this == NULL )
+        {
+            return;
+        }
         mEarned = false;
     }
 inline char* Reward::GetFile()

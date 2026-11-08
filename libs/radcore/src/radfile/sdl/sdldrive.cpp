@@ -1080,7 +1080,6 @@ radSdlDrive::radSdlDrive(const char* pdrivespec, radMemoryAllocator alloc)
     mkdir( "/storage/emulated/0/Simpsons Hit and Run", 0777 );
     mkdir( "/storage/emulated/0/Simpsons Hit and Run/files", 0777 );
     mkdir( "/storage/emulated/0/Simpsons Hit and Run/mods", 0777 );
-    mkdir( "/storage/emulated/0/simpsons_mods", 0777 );
 
     const char* publicFiles = "/storage/emulated/0/Simpsons Hit and Run/files/";
     const char* ext = SDL_AndroidGetExternalStoragePath();

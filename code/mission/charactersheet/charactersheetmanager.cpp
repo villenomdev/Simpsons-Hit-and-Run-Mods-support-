@@ -175,7 +175,10 @@ void CharacterSheetManager::SetMissionComplete(RenderEnums::LevelEnum level, con
                 Reward* pReward=GetRewardsManager()->GetReward(level,Reward::eStreetRace);
                 //assert if we there isnt a reward for the streetrace.
                 rTuneAssert(pReward != NULL);
-                pReward->UnlockReward();
+                if (pReward != NULL)
+                {
+                    pReward->UnlockReward();
+                }
                 GetEventManager()->TriggerEvent(EVENT_COMPLETED_ALLSTREETRACES);
             }
 
@@ -193,7 +196,10 @@ void CharacterSheetManager::SetMissionComplete(RenderEnums::LevelEnum level, con
                 Reward* pReward=GetRewardsManager()->GetReward(level,Reward::eBonusMission);
                 //assert if we there isnt a reward for the BonusMission.
                 rTuneAssert(pReward != NULL);
-                pReward->UnlockReward();
+                if (pReward != NULL)
+                {
+                    pReward->UnlockReward();
+                }
                 GetEventManager()->TriggerEvent(EVENT_COMPLETED_BONUSMISSIONS);
             }
 
@@ -826,7 +832,10 @@ void CharacterSheetManager::SaveData(GameDataByte* dataBuffer,unsigned int numBy
             Reward* pReward = GetRewardsManager()->GetReward(level,Reward::eCards);
             //Assert if no reward found
             rTuneAssert(pReward != NULL);
-            pReward->UnlockReward();
+            if (pReward != NULL)
+            {
+                pReward->UnlockReward();
+            }
             GetEventManager()->TriggerEvent(EVENT_COLLECTED_ALLCARDS);
         }
 
@@ -845,7 +854,10 @@ void CharacterSheetManager::SaveData(GameDataByte* dataBuffer,unsigned int numBy
             Reward* pReward = GetRewardsManager()->GetReward(level,Reward::eCards);
             //Assert if no reward found
             rTuneAssert(pReward != NULL);
-            pReward->UnlockReward();
+            if (pReward != NULL)
+            {
+                pReward->UnlockReward();
+            }
             GetEventManager()->TriggerEvent(EVENT_COLLECTED_ALLCARDS);
         }
     }
@@ -1772,43 +1784,59 @@ CharacterSheetManager::IsAllStoryMissionsCompleted()
         for (int i = 0; i<MAX_LEVELS;i++)
         {
             //update default vehicle
-            if( static_cast<int>( QueryHighestMission().mLevel ) >= i )
+            Reward* defaultCar = GetRewardsManager()->GetReward((RenderEnums::LevelEnum) i,Reward::eDefaultCar);
+            if( defaultCar != NULL )
             {
-                GetRewardsManager()->GetReward((RenderEnums::LevelEnum) i,Reward::eDefaultCar)->UnlockReward();
-            }
-            else
-            {
-                GetRewardsManager()->GetReward((RenderEnums::LevelEnum) i,Reward::eDefaultCar)->LockReward();
+                if( static_cast<int>( QueryHighestMission().mLevel ) >= i )
+                {
+                    defaultCar->UnlockReward();
+                }
+                else
+                {
+                    defaultCar->LockReward();
+                }
             }
 
             //update the cards unlockable
-            if (spInstance->QueryAllCardsCollected((RenderEnums::LevelEnum)i) == true)
+            Reward* cardReward = GetRewardsManager()->GetReward((RenderEnums::LevelEnum) i,Reward::eCards);
+            if( cardReward != NULL )
             {
-                GetRewardsManager()->GetReward((RenderEnums::LevelEnum) i,Reward::eCards)->UnlockReward();
-            }
-            else
-            {
-                GetRewardsManager()->GetReward((RenderEnums::LevelEnum) i,Reward::eCards)->LockReward();
+                if (spInstance->QueryAllCardsCollected((RenderEnums::LevelEnum)i) == true)
+                {
+                    cardReward->UnlockReward();
+                }
+                else
+                {
+                    cardReward->LockReward();
+                }
             }
 
             //update the streetraces
-            if (spInstance->QueryAllStreetRacesCompleted((RenderEnums::LevelEnum) i) == true)
+            Reward* streetRaceReward = GetRewardsManager()->GetReward((RenderEnums::LevelEnum) i,Reward::eStreetRace);
+            if( streetRaceReward != NULL )
             {
-                GetRewardsManager()->GetReward((RenderEnums::LevelEnum) i,Reward::eStreetRace)->UnlockReward();
-            }
-            else
-            {
-                GetRewardsManager()->GetReward((RenderEnums::LevelEnum) i,Reward::eStreetRace)->LockReward();
+                if (spInstance->QueryAllStreetRacesCompleted((RenderEnums::LevelEnum) i) == true)
+                {
+                    streetRaceReward->UnlockReward();
+                }
+                else
+                {
+                    streetRaceReward->LockReward();
+                }
             }
 
             //update the bonus mission
-            if (spInstance->QueryBonusMissionCompleted((RenderEnums::LevelEnum)i) == true )
+            Reward* bonusMissionReward = GetRewardsManager()->GetReward((RenderEnums::LevelEnum) i,Reward::eBonusMission);
+            if( bonusMissionReward != NULL )
             {
-                GetRewardsManager()->GetReward((RenderEnums::LevelEnum) i,Reward::eBonusMission)->UnlockReward();
-            }
-            else
-            {
-                GetRewardsManager()->GetReward((RenderEnums::LevelEnum) i,Reward::eBonusMission)->LockReward();
+                if (spInstance->QueryBonusMissionCompleted((RenderEnums::LevelEnum)i) == true )
+                {
+                    bonusMissionReward->UnlockReward();
+                }
+                else
+                {
+                    bonusMissionReward->LockReward();
+                }
             }
 
             //update the purchase rewards now
@@ -1816,14 +1844,14 @@ CharacterSheetManager::IsAllStoryMissionsCompleted()
             //cycle thru the rewards that we have used coins to by and unlock the rewards in the manager
             for (int j=0;j<MAX_PURCHASED_ITEMS;j++)
             {
-                if (spInstance->mCharacterSheet.mLevelList[i].mPurchasedRewards[j])
+                Merchandise* merchandise = GetRewardsManager()->GetMerchandise(i,j);
+                if( merchandise != NULL )
                 {
-                    GetRewardsManager()->GetMerchandise(i,j)->UnlockReward();
-                }
-                else
-                {
-                    Merchandise* merchandise = GetRewardsManager()->GetMerchandise(i,j);
-                    if( merchandise != NULL )
+                    if (spInstance->mCharacterSheet.mLevelList[i].mPurchasedRewards[j])
+                    {
+                        merchandise->UnlockReward();
+                    }
+                    else
                     {
                         merchandise->LockReward();
                     }

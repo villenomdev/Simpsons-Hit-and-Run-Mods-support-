@@ -84,7 +84,6 @@ void AndroidConfigurationManager::Initialize()
     mkdir( "/storage/emulated/0/Simpsons Hit and Run", 0777 );
     mkdir( "/storage/emulated/0/Simpsons Hit and Run/files", 0777 );
     mkdir( "/storage/emulated/0/Simpsons Hit and Run/mods", 0777 );
-    mkdir( "/storage/emulated/0/simpsons_mods", 0777 );
 
     if( !this->BuildPaths() )
     {
