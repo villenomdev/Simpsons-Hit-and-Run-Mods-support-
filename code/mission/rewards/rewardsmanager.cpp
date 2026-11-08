@@ -32,7 +32,7 @@
 #if defined(RAD_ANDROID)
 #include <stdio.h>
 #include <android/log.h>
-#include <radfile/sdl/sdldrive.hpp>
+extern bool radSdlDriveFindModFile( const char* rawFileName, char* outPath, size_t outSize );
 #define REWARDS_LOGI(...) __android_log_print(ANDROID_LOG_INFO, "SimpsonsHitAndRun", __VA_ARGS__)
 #endif
 
