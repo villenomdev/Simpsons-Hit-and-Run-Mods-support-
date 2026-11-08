@@ -37,6 +37,7 @@
 #include <worldsim/coins/coinmanager.h>
 #include <render/RenderManager/RenderManager.h>
 #include <render/RenderManager/RenderLayer.h>
+#include <p3d/view.hpp>
 
 //******************************************************************************
 //

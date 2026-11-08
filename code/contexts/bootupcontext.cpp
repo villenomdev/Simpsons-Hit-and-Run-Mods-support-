@@ -35,6 +35,7 @@
 #include <radmovie2.hpp>
 #include <p3d/utility.hpp>
 #include <p3d/context.hpp>
+#include <p3d/view.hpp>
 #include <pddi/pddi.hpp>
 
 //========================================
