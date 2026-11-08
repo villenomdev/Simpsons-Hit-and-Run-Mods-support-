@@ -40,7 +40,7 @@ void Scenegraph::SetRoot(Node* n)
 
 void Scenegraph::UpdateTransform(void)
 {
-    if(root->flags & Node::BRANCH_TRANSFORM_DIRTY)
+    if(root != NULL && (root->flags & Node::BRANCH_TRANSFORM_DIRTY))
     {
         root->UpdateTransform(identity);
     }
@@ -48,6 +48,11 @@ void Scenegraph::UpdateTransform(void)
 
 void Scenegraph::Display(void) 
 { 
+    if(root == NULL)
+    {
+        return;
+    }
+
     UpdateTransform();
 
     p3d::stack->Push();
@@ -59,6 +64,11 @@ void Scenegraph::Display(void)
 
 void Scenegraph::CustomDisplay(CustomDisplayCallback* callback) 
 { 
+    if(root == NULL)
+    {
+        return;
+    }
+
     UpdateTransform();
 
     p3d::stack->Push();
@@ -69,6 +79,10 @@ void Scenegraph::CustomDisplay(CustomDisplayCallback* callback)
 
 Node* Scenegraph::Find(const char* name)
 {
+    if(root == NULL || name == NULL)
+    {
+        return NULL;
+    }
     return Search(root, tEntity::MakeUID(name));
 }
 
@@ -113,6 +127,10 @@ protected:
 
 void Scenegraph::ProcessShaders(ShaderCallback& callback)
 {
+    if(root == NULL)
+    {
+        return;
+    }
 
     ShaderVisitor v(callback);
     SceneGraphTraversal::Traverse(root, v);
@@ -137,6 +155,11 @@ void TranslucentDrawableCounter::Visit(Node* sceneGraphNode)
 
 void SceneGraphTraversal::Traverse(Node* node, SceneGraphVisitor& vis)
 {
+    if(node == NULL)
+    {
+        return;
+    }
+
     unsigned count = node->GetNumChildren();
 
     // Visit the node
@@ -170,17 +193,28 @@ Iterator::~Iterator()
 void Iterator::First ()
 {
     m_currentStackIndex = 0;
-    m_current = m_scenegraph->GetRoot();
+    m_current = m_scenegraph ? m_scenegraph->GetRoot() : NULL;
     m_searchStack[m_currentStackIndex].sceneNode = m_current;
     m_searchStack[m_currentStackIndex].currentChildIndex = 0;
-    m_isDone = false;
+    m_isDone = (m_current == NULL);
 }
 
 void Iterator::Next ()
 {
+    if(m_isDone)
+    {
+        return;
+    }
+
     P3DASSERT(m_currentStackIndex<m_searchStackSize);
 
     Node* currentParentNode = m_searchStack[m_currentStackIndex].sceneNode;
+    if(currentParentNode == NULL)
+    {
+        this->m_isDone = true;
+        return;
+    }
+
     unsigned currentChildCount  = m_searchStack[m_currentStackIndex].currentChildIndex;
 
     //
@@ -217,10 +251,15 @@ void Iterator::Next ()
             m_searchStack[m_currentStackIndex].currentChildIndex = 0;
             --m_currentStackIndex;
             currentParentNode = m_searchStack[m_currentStackIndex].sceneNode;
+            if(currentParentNode == NULL)
+            {
+                this->m_isDone = true;
+                return;
+            }
             currentChildCount  = m_searchStack[m_currentStackIndex].currentChildIndex;
         }
 
-        if((m_currentStackIndex>=0) && (currentChildCount < currentParentNode->GetNumChildren()))
+        if((m_currentStackIndex>=0) && (currentParentNode != NULL) && (currentChildCount < currentParentNode->GetNumChildren()))
         {
             m_current = currentParentNode->GetChild(currentChildCount);
             m_searchStack[m_currentStackIndex].currentChildIndex++;
@@ -886,9 +925,12 @@ tEntity* SceneGraphGenericLoader::LoadObject(tChunkFile* f, tEntityStore* store)
     //
     // Scene Graph drawList setup
     //
-    TranslucentDrawableCounter translucentDrawableCount;
-    SceneGraphTraversal::Traverse(scene->GetRoot(), translucentDrawableCount);
-    scene->translucentDrawables.SetSize(translucentDrawableCount.GetCount());
+    if( scene->GetRoot() != NULL )
+    {
+        TranslucentDrawableCounter translucentDrawableCount;
+        SceneGraphTraversal::Traverse(scene->GetRoot(), translucentDrawableCount);
+        scene->translucentDrawables.SetSize(translucentDrawableCount.GetCount());
+    }
 
     //
     // Copy calculated bounding box to scenegraph

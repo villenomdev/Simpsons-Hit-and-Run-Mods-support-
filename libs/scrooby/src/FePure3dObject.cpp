@@ -352,37 +352,43 @@ void FePure3dObject::Render()
             SetDrawable( dynamic_cast<tDrawable*>( FeApp::GetInstance()->GetFeResourceManager().GetResource( index ) ) );
             drawable = GetDrawable();
 
-            tShaderIntBroadcast colourWrite(PDDI_SP_COLOURWRITE, m_colourWriteEnabled ? PDDI_WRITE_ALL : PDDI_WRITE_ALPHA);
-            drawable->ProcessShaders(colourWrite);
+            if( drawable != NULL )
+            {
+                tShaderIntBroadcast colourWrite(PDDI_SP_COLOURWRITE, m_colourWriteEnabled ? PDDI_WRITE_ALL : PDDI_WRITE_ALPHA);
+                drawable->ProcessShaders(colourWrite);
+            }
         }
 
         rAssert( drawable != NULL );
-        sg::Scenegraph* scene = p3d::find<sg::Scenegraph>( drawable->GetUID() );
-        if( scene != NULL )
+        if( drawable != NULL )
         {
-            // add any light groups found under scenegraph root
-            //
-            sg::LightGroupIterator it( scene );
-            for( it.First(); !it.IsDone(); it.Next() )
+            sg::Scenegraph* scene = p3d::find<sg::Scenegraph>( drawable->GetUID() );
+            if( scene != NULL && scene->GetRoot() != NULL )
             {
-                tLightGroup* lightGroup = it.GetLightGroup()->GetLights();
-                if( lightGroup != NULL )
+                // add any light groups found under scenegraph root
+                //
+                sg::LightGroupIterator it( scene );
+                for( it.First(); !it.IsDone(); it.Next() )
                 {
-                    // add each light in light group to current view
-                    //
-                    for( int i = 0; i < lightGroup->GetNumLights(); i++ )
+                    tLightGroup* lightGroup = it.GetLightGroup()->GetLights();
+                    if( lightGroup != NULL )
                     {
-                        if( m_numLightsAdded >= MAX_NUM_LIGHTS )
+                        // add each light in light group to current view
+                        //
+                        for( int i = 0; i < lightGroup->GetNumLights(); i++ )
                         {
-                            break;
-                        }
-                        tLight* pLight = lightGroup->GetLight( i );
-                        if( pLight != NULL )
-                        {
-                            unsigned int handle = m_View->AddLight( pLight );
-                            if( handle != 0xffffffff && handle < MAX_NUM_LIGHTS )
+                            if( m_numLightsAdded >= MAX_NUM_LIGHTS )
                             {
-                                m_lightsAdded[ m_numLightsAdded++ ] = handle;
+                                break;
+                            }
+                            tLight* pLight = lightGroup->GetLight( i );
+                            if( pLight != NULL )
+                            {
+                                unsigned int handle = m_View->AddLight( pLight );
+                                if( handle != 0xffffffff && handle < MAX_NUM_LIGHTS )
+                                {
+                                    m_lightsAdded[ m_numLightsAdded++ ] = handle;
+                                }
                             }
                         }
                     }
@@ -529,7 +535,14 @@ void FePure3dObject::Render()
     // draw the damn thing!
     //
     rAssert( m_RuntimeDrawable != NULL );
-    m_RuntimeDrawable->Display();
+    if( m_RuntimeDrawable != NULL )
+    {
+        sg::Scenegraph* sgDrawable = dynamic_cast<sg::Scenegraph*>( m_RuntimeDrawable );
+        if( sgDrawable == NULL || sgDrawable->GetRoot() != NULL )
+        {
+            m_RuntimeDrawable->Display();
+        }
+    }
 
     // restore everything we changed
     //
