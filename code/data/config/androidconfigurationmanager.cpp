@@ -7,6 +7,10 @@
     #include <SDL.h>
     #include <sys/stat.h>
     #include <errno.h>
+
+extern void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod );
+#else
+void radSdlDriveSetModsConfig( bool, const char*, const char* ) {}
 #endif
 
 namespace
@@ -39,8 +43,13 @@ AndroidConfigurationManager::AndroidConfigurationManager()
     m_invertCamera( true ),
     m_gamepadVibration( true ),
     m_phoneVibration( false ),
+    m_enableMods( true ),
     m_dirty( false )
 {
+    strncpy( m_modsPath, "/storage/emulated/0/simpsons_mods", sizeof( m_modsPath ) );
+    m_modsPath[ sizeof( m_modsPath ) - 1 ] = '\0';
+    m_activeMod[ 0 ] = '\0';
+
 #if defined(RAD_ANDROID)
     m_directoryPath[ 0 ] = '\0';
     m_configurationFilePath[ 0 ] = '\0';
@@ -53,6 +62,10 @@ void AndroidConfigurationManager::SetDefaults()
     m_invertCamera = true;
     m_gamepadVibration = true;
     m_phoneVibration = false;
+    m_enableMods = true;
+    strncpy( m_modsPath, "/storage/emulated/0/simpsons_mods", sizeof( m_modsPath ) );
+    m_modsPath[ sizeof( m_modsPath ) - 1 ] = '\0';
+    m_activeMod[ 0 ] = '\0';
     m_dirty = false;
 }
 
@@ -76,6 +89,12 @@ void AndroidConfigurationManager::Initialize()
 
     const bool loadedConfiguration = this->LoadConfigurationFile();
     const int loadedVersion = this->LoadVersionFile();
+
+    // Ensure external mods folder exists
+    mkdir( m_modsPath, 0777 );
+
+    // Update radSdlDrive with mods settings
+    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod );
 
     //
     // If the file does not exist, or the version is old/missing,
@@ -173,6 +192,56 @@ void AndroidConfigurationManager::SetGamepadVibrationEnabled( bool enabled )
 void AndroidConfigurationManager::SetPhoneVibrationEnabled( bool enabled )
 {
     m_phoneVibration = enabled;
+}
+
+bool AndroidConfigurationManager::IsModsEnabled() const
+{
+    return m_enableMods;
+}
+
+const char* AndroidConfigurationManager::GetModsPath() const
+{
+    return m_modsPath;
+}
+
+const char* AndroidConfigurationManager::GetActiveMod() const
+{
+    return m_activeMod;
+}
+
+void AndroidConfigurationManager::SetModsEnabled( bool enabled )
+{
+    if( m_enableMods == enabled )
+    {
+        return;
+    }
+    m_enableMods = enabled;
+    m_dirty = true;
+    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod );
+}
+
+void AndroidConfigurationManager::SetModsPath( const char* path )
+{
+    if( path == NULL )
+    {
+        return;
+    }
+    strncpy( m_modsPath, path, sizeof( m_modsPath ) - 1 );
+    m_modsPath[ sizeof( m_modsPath ) - 1 ] = '\0';
+    m_dirty = true;
+    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod );
+}
+
+void AndroidConfigurationManager::SetActiveMod( const char* modName )
+{
+    if( modName == NULL )
+    {
+        return;
+    }
+    strncpy( m_activeMod, modName, sizeof( m_activeMod ) - 1 );
+    m_activeMod[ sizeof( m_activeMod ) - 1 ] = '\0';
+    m_dirty = true;
+    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod );
 }
 
 #if defined(RAD_ANDROID)
@@ -284,13 +353,21 @@ void AndroidConfigurationManager::WriteConfigurationFile()
     }
 
     fprintf( file, "# Simpsons Hit & Run Android - Configuration\n" );
-    fprintf( file, "# Change only true/false values.\n" );
-    fprintf( file, "# U can put 1/0 values too.\n" );
     fprintf( file, "# Restart the game after changing this file.\n" );
     fprintf( file, "\n" );
 
     fprintf( file, "invert_camera=%s\n", m_invertCamera ? "true" : "false" );
     fprintf( file, "gamepad_vibration=%s\n", m_gamepadVibration ? "true" : "false" );
+    fprintf( file, "\n" );
+    fprintf( file, "# ------------------------------------------------------------\n" );
+    fprintf( file, "# Mod Loader Settings\n" );
+    fprintf( file, "# ------------------------------------------------------------\n" );
+    fprintf( file, "# enable_mods: true/false (load mods and loose files)\n" );
+    fprintf( file, "enable_mods=%s\n", m_enableMods ? "true" : "false" );
+    fprintf( file, "# mods_directory: Folder path on internal storage for mods\n" );
+    fprintf( file, "mods_directory=%s\n", m_modsPath );
+    fprintf( file, "# active_mod: Name of active mod folder (leave empty to load files directly from mods_directory)\n" );
+    fprintf( file, "active_mod=%s\n", m_activeMod );
 
     fclose( file );
 }
@@ -399,6 +476,20 @@ void AndroidConfigurationManager::ParseLine( const char* line )
     else if( strcmp( key, "phone_vibration" ) == 0 )
     {
         m_phoneVibration = this->ParseBool( value, m_phoneVibration );
+    }
+    else if( strcmp( key, "enable_mods" ) == 0 )
+    {
+        m_enableMods = this->ParseBool( value, m_enableMods );
+    }
+    else if( strcmp( key, "mods_directory" ) == 0 || strcmp( key, "mods_path" ) == 0 )
+    {
+        strncpy( m_modsPath, value, sizeof( m_modsPath ) - 1 );
+        m_modsPath[ sizeof( m_modsPath ) - 1 ] = '\0';
+    }
+    else if( strcmp( key, "active_mod" ) == 0 || strcmp( key, "activate_mods" ) == 0 || strcmp( key, "active_mods" ) == 0 )
+    {
+        strncpy( m_activeMod, value, sizeof( m_activeMod ) - 1 );
+        m_activeMod[ sizeof( m_activeMod ) - 1 ] = '\0';
     }
 }
 

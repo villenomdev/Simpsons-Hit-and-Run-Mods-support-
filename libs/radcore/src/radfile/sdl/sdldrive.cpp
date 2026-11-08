@@ -64,6 +64,112 @@ static void LogPathStatus(const char* label, const char* path)
              label, path, errno, strerror(errno));
     }
 }
+
+//=============================================================================
+// Android Mod Loader Subsystem
+//=============================================================================
+static bool s_ModsEnabled = true;
+static char s_ModsDirectory[512] = "/storage/emulated/0/simpsons_mods";
+static char s_ActiveMod[256] = "";
+
+void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod )
+{
+    s_ModsEnabled = enabled;
+    if( modsDir != NULL && modsDir[ 0 ] != '\0' )
+    {
+        strncpy( s_ModsDirectory, modsDir, sizeof( s_ModsDirectory ) - 1 );
+        s_ModsDirectory[ sizeof( s_ModsDirectory ) - 1 ] = '\0';
+    }
+    if( activeMod != NULL )
+    {
+        strncpy( s_ActiveMod, activeMod, sizeof( s_ActiveMod ) - 1 );
+        s_ActiveMod[ sizeof( s_ActiveMod ) - 1 ] = '\0';
+    }
+    LOGI("[Mods] Config updated: enabled=%d, dir='%s', active_mod='%s'",
+         s_ModsEnabled ? 1 : 0, s_ModsDirectory, s_ActiveMod);
+}
+
+static bool CheckModCandidate( const char* basePath, const char* subPath, const char* cleanFileName, char* outPath, size_t outSize )
+{
+    char candidate[1024];
+    if( subPath && subPath[0] != '\0' )
+    {
+        snprintf( candidate, sizeof(candidate), "%s/%s/%s", basePath, subPath, cleanFileName );
+    }
+    else
+    {
+        snprintf( candidate, sizeof(candidate), "%s/%s", basePath, cleanFileName );
+    }
+
+    if( access( candidate, R_OK ) == 0 )
+    {
+        struct stat st;
+        if( stat( candidate, &st ) == 0 && !S_ISDIR( st.st_mode ) )
+        {
+            strncpy( outPath, candidate, outSize - 1 );
+            outPath[ outSize - 1 ] = '\0';
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool FindModFile( const char* rawFileName, char* outPath, size_t outSize )
+{
+    if( !s_ModsEnabled || rawFileName == NULL || rawFileName[0] == '\0' )
+    {
+        return false;
+    }
+
+    // Normalize slashes and remove leading drive or slashes
+    std::string cleanName( rawFileName );
+    std::replace( cleanName.begin(), cleanName.end(), '\\', '/' );
+    while( !cleanName.empty() && ( cleanName[0] == '/' || cleanName[0] == '.' ) )
+    {
+        cleanName.erase( 0, 1 );
+    }
+
+    if( cleanName.empty() )
+    {
+        return false;
+    }
+
+    const char* cname = cleanName.c_str();
+
+    // 1. If an active mod is configured, check inside that mod folder
+    if( s_ActiveMod[0] != '\0' && strcmp( s_ActiveMod, "none" ) != 0 )
+    {
+        // 1a. Check <mods_dir>/<active_mod>/CustomFiles/<file> (LMLM format)
+        char sub[512];
+        snprintf( sub, sizeof(sub), "%s/CustomFiles", s_ActiveMod );
+        if( CheckModCandidate( s_ModsDirectory, sub, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+
+        // 1b. Check <mods_dir>/<active_mod>/<file>
+        if( CheckModCandidate( s_ModsDirectory, s_ActiveMod, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+    }
+
+    // 2. Check root of mods_directory with CustomFiles
+    if( CheckModCandidate( s_ModsDirectory, "CustomFiles", cname, outPath, outSize ) )
+    {
+        return true;
+    }
+
+    // 3. Check root of mods_directory directly
+    if( CheckModCandidate( s_ModsDirectory, NULL, cname, outPath, outSize ) )
+    {
+        return true;
+    }
+
+    return false;
+}
+#else
+void radSdlDriveSetModsConfig( bool, const char*, const char* ) {}
 #endif
 
 
@@ -472,6 +578,16 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
     //
     char fullName[ radFileFilenameMax + 1 ];
     BuildFileSpec( fileName, fullName, radFileFilenameMax + 1 );
+
+#if defined(RAD_ANDROID)
+    char modFileSpec[ 1024 ];
+    if( FindModFile( fileName, modFileSpec, sizeof(modFileSpec) ) )
+    {
+        LOGI("[Mods] Intercepted file: '%s' -> '%s'", fileName, modFileSpec);
+        strncpy( fullName, modFileSpec, radFileFilenameMax );
+        fullName[ radFileFilenameMax ] = '\0';
+    }
+#endif
 
     //
     // Translate flags to SDL

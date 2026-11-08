@@ -86,6 +86,10 @@ void CementFileHandler::LoadFile( const char* filename,
     mpCallback = pCallback;
     mpUserData = pUserData;
 
+#if defined(RAD_ANDROID)
+    // On Android, allow mods and loose files on disk to take priority over RCF cement libraries
+    priority = radCementLibraryAfterDrive;
+#else
     if( CommandLineOptions::Get( CLO_CD_FILES_ONLY ) )
     {
         priority = radCementLibraryBeforeDrive;
@@ -94,6 +98,7 @@ void CementFileHandler::LoadFile( const char* filename,
     {
         priority = radCementLibraryAfterDrive;
     }
+#endif
 
     ::radFileRegisterCementLibrary( &(m_libraryStruct->library),
                                     filename,

@@ -44,6 +44,8 @@
 //
 void radSdlDriveFactory( radDrive** ppDrive, const char* driveSpec, radMemoryAllocator alloc );
 
+void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod );
+
 /*
 //
 // Constructs a cached version of the SDL drive

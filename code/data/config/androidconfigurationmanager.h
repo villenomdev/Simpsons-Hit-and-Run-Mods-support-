@@ -14,10 +14,16 @@ public:
     bool IsInvertCameraEnabled() const;
     bool IsGamepadVibrationEnabled() const;
     bool IsPhoneVibrationEnabled() const;
+    bool IsModsEnabled() const;
+    const char* GetModsPath() const;
+    const char* GetActiveMod() const;
 
     void SetInvertCameraEnabled( bool enabled );
     void SetGamepadVibrationEnabled( bool enabled );
     void SetPhoneVibrationEnabled( bool enabled );
+    void SetModsEnabled( bool enabled );
+    void SetModsPath( const char* path );
+    void SetActiveMod( const char* modName );
 
 private:
     AndroidConfigurationManager();
@@ -44,7 +50,11 @@ private:
     bool m_invertCamera;
     bool m_gamepadVibration;
     bool m_phoneVibration;
+    bool m_enableMods;
     bool m_dirty;
+
+    char m_modsPath[ 512 ];
+    char m_activeMod[ 256 ];
     
 
 #if defined(RAD_ANDROID)

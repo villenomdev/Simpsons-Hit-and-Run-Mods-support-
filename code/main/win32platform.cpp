@@ -127,6 +127,7 @@
 
 #ifdef RAD_ANDROID
 #include <android/log.h>
+#include <data/config/androidconfigurationmanager.h>
 #endif
 
 
@@ -646,6 +647,7 @@ void Win32Platform::InitializePlatform()
 #ifdef RAD_ANDROID
 	mFullscreen = true; // ESTO ES IMPORTANTE TENERLO EN ANDROID DE OTRA FORMA LAS BARRAS DEL MENU DEL MOVIL COMO LA HORA Y EL VOLVER HACIA ATRAS VIRTUAL TAPAN PARTES DE LA PANTALLA
      SDL_SetWindowFullscreen( mWnd, mFullscreen ? SDL_WINDOW_FULLSCREEN : 0 );
+     GetAndroidConfigurationManager()->Initialize();
 #endif
 
 #ifndef __SWITCH__
