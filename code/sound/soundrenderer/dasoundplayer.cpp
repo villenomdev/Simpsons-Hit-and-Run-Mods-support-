@@ -1143,11 +1143,12 @@ void daSoundClipStreamPlayer::HookUpAndCuePlayer( void )
         case IDaSoundResource::CLIP:
         {
             IRadSoundClip * pClip = pFileInstance->GetSoundClip( );
-            rAssert( NULL != pClip );
-            
-            // Attach the clip to the player
-            m_ClipInfo.m_pClipPlayer->SetClip( pClip );
-            m_ClipInfo.m_pClipPlayer->SetPositionalGroup( m_IsPositional ? m_pPositionalGroup : NULL );
+            if ( pClip != NULL )
+            {
+                // Attach the clip to the player
+                m_ClipInfo.m_pClipPlayer->SetClip( pClip );
+                m_ClipInfo.m_pClipPlayer->SetPositionalGroup( m_IsPositional ? m_pPositionalGroup : NULL );
+            }
             
             break;
         }

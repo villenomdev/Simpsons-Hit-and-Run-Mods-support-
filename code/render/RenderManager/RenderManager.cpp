@@ -1463,6 +1463,11 @@ END_PROFILE( "Add Requests Int" );
                 }
                 else
                 {
+                    if( mbFirstDynamicZone )
+                    {
+                        mbFirstDynamicZone = false;
+                        GetEventManager()->TriggerEvent( EVENT_FIRST_DYNAMIC_ZONE_END );
+                    }
                     GetEventManager()->TriggerEvent( EVENT_ALL_DYNAMIC_ZONE_END );
                     rReleasePrintf("ZoneLoadingEnded Verified\n");
                     mbDynaLoading = false;
@@ -1715,6 +1720,16 @@ BEGIN_PROFILE( "RenderManager HandleEvent" );
    case EVENT_LOCATOR+LocatorEvent::DYNAMIC_ZONE:
    {
          ZoneEventLocator* pZEL = (ZoneEventLocator*)pEventData;
+         if( pZEL == NULL )
+         {
+             if( mbFirstDynamicZone )
+             {
+                 mbFirstDynamicZone = false;
+                 GetEventManager()->TriggerEvent( EVENT_FIRST_DYNAMIC_ZONE_END );
+             }
+             GetEventManager()->TriggerEvent( EVENT_ALL_DYNAMIC_ZONE_END );
+             break;
+         }
          //HeapMgr()->DumpHeapStats(true);
 
         /* if(!(pZEL->GetPlayerEntered()))
@@ -1752,6 +1767,12 @@ BEGIN_PROFILE( "RenderManager HandleEvent" );
 
             if(pZEL->GetNumLoadZones()==0 && pZEL->GetNumDumpZones()==0)
             {
+               if( mbFirstDynamicZone )
+               {
+                   mbFirstDynamicZone = false;
+                   GetEventManager()->TriggerEvent( EVENT_FIRST_DYNAMIC_ZONE_END );
+               }
+               GetEventManager()->TriggerEvent( EVENT_ALL_DYNAMIC_ZONE_END );
 END_PROFILE( "RenderManager HandleEvent" );
                rReleasePrintf("Nothin to Load, skipping zone\n");
                return;
@@ -1891,6 +1912,11 @@ END_PROFILE( "Add Requests Int" );
                 }
                 else
                 {
+                    if( mbFirstDynamicZone )
+                    {
+                        mbFirstDynamicZone = false;
+                        GetEventManager()->TriggerEvent( EVENT_FIRST_DYNAMIC_ZONE_END );
+                    }
                     GetEventManager()->TriggerEvent( EVENT_ALL_DYNAMIC_ZONE_END );
                     rReleasePrintf("ZoneLoadingEnded Verified\n");
                     mbDynaLoading = false;

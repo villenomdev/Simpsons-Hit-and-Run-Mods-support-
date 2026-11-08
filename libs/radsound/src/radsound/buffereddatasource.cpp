@@ -65,6 +65,10 @@ radSoundBufferedDataSource::~radSoundBufferedDataSource( void )
 
 IRadSoundHalDataSource::State radSoundBufferedDataSource::GetState( void )
 {
+    if ( m_State == NONE )
+    {
+        return IRadSoundHalDataSource::Error;
+    }
 	return m_State == INITIALIZED ? IRadSoundHalDataSource::Initialized : IRadSoundHalDataSource::Initializing;
 }
 
@@ -499,6 +503,13 @@ void radSoundBufferedDataSource::Service( void )
 
 void radSoundBufferedDataSource::ServiceInitializingSource( void )
 {
+    if ( m_xIRadSoundHalDataSource == NULL )
+    {
+        m_State = NONE;
+        RemoveFromUpdateList( );
+        return;
+    }
+
 	if ( m_xIRadSoundHalDataSource->GetState( ) == IRadSoundHalDataSource::Initialized )
 	{
         //
@@ -522,6 +533,12 @@ void radSoundBufferedDataSource::ServiceInitializingSource( void )
 
 		Service( );
 	}
+    else if ( m_xIRadSoundHalDataSource->GetState( ) == IRadSoundHalDataSource::Error )
+    {
+        rReleasePrintf( "radSoundBufferedDataSource: input data source returned Error\n" );
+        m_State = NONE;
+        RemoveFromUpdateList( );
+    }
 }
 
 //============================================================================

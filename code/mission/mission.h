@@ -132,6 +132,7 @@ public:
     void SetVehicleRestart( CarStartLocator* loc ) { mVehicleRestart = loc; };
     void SetPlayerRestart( Locator* loc ) { mPlayerRestart = loc; };
     void SetRestartDynaload( const char* loadString, const char* interior = NULL ) ;
+    ZoneEventLocator* GetDynaloadLocator() { return mDynaloadLoc; };
     void LoadStreetRaceProps(const char* loadString );
     void UnloadStreetRaceProps (const char* loadString);
 

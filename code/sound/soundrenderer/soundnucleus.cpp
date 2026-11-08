@@ -473,8 +473,11 @@ void SoundNucleusFinishClipLoad( IRadSoundClip ** ppClip )
     *ppClip = gClipLoadInfo.pClip;
     gClipLoadInfo.pClip = NULL;
     
-    gClipLoadInfo.pFds->Release( );
-    gClipLoadInfo.pFds = NULL;
+    if ( gClipLoadInfo.pFds != NULL )
+    {
+        gClipLoadInfo.pFds->Release( );
+        gClipLoadInfo.pFds = NULL;
+    }
     
     if ( NULL != gClipLoadInfo.pBds )
     {
@@ -553,6 +556,11 @@ void SoundNucleusServiceClipLoad( void )
                         gClipLoadInfo.state = ClipLoadState_LoadingClip;
                     }
                 }
+                else if ( IRadSoundHalDataSource::Error == gClipLoadInfo.pFds->GetState( ) )
+                {
+                    rReleasePrintf( "SoundNucleusServiceClipLoad: IRadSoundHalDataSource error loading clip\n" );
+                    gClipLoadInfo.state = ClipLoadState_Done;
+                }
                 
                 break;
             }
@@ -570,6 +578,11 @@ void SoundNucleusServiceClipLoad( void )
                         
                     gClipLoadInfo.state = ClipLoadState_LoadingClip;
                 }
+                else if ( IRadSoundHalDataSource::Error == gClipLoadInfo.pBds->GetState( ) )
+                {
+                    rReleasePrintf( "SoundNucleusServiceClipLoad: BufferedDataSource error loading clip\n" );
+                    gClipLoadInfo.state = ClipLoadState_Done;
+                }
                 
                 break;
             }
@@ -577,6 +590,11 @@ void SoundNucleusServiceClipLoad( void )
             {
                 if ( IRadSoundClip::Initialized == gClipLoadInfo.pClip->GetState( ) )
                 {
+                    gClipLoadInfo.state = ClipLoadState_Done;
+                }
+                else if ( IRadSoundClip::Error == gClipLoadInfo.pClip->GetState( ) )
+                {
+                    rReleasePrintf( "SoundNucleusServiceClipLoad: IRadSoundClip error loading clip\n" );
                     gClipLoadInfo.state = ClipLoadState_Done;
                 }
                 

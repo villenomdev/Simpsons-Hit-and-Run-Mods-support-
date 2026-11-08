@@ -236,9 +236,11 @@ void daSoundFileInstance::UnLoad( void )
         }
         else if ( Loaded == m_State )
         {
-            rAssert( m_pSoundClip != NULL );
-            m_pSoundClip->Release( );
-            m_pSoundClip = NULL;
+            if ( m_pSoundClip != NULL )
+            {
+                m_pSoundClip->Release( );
+                m_pSoundClip = NULL;
+            }
         }
     }
 

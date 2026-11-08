@@ -246,6 +246,7 @@ void MissionManager::Initialize()
     }
 
     GetEventManager()->AddListener( this, EVENT_FIRST_DYNAMIC_ZONE_END );
+    GetEventManager()->AddListener( this, EVENT_ALL_DYNAMIC_ZONE_END );
     GetEventManager()->AddListener( this, EVENT_GUI_LEAVING_PAUSE_MENU );
 }
 
@@ -426,7 +427,7 @@ void MissionManager::Reset()
 //=============================================================================
 void MissionManager::HandleEvent( EventEnum id, void* pEventData )
 {
-    if( mLoadingState == STATE_WAIT_FOR_DYNALOAD && id == EVENT_FIRST_DYNAMIC_ZONE_END )
+    if( mLoadingState == STATE_WAIT_FOR_DYNALOAD && ( id == EVENT_FIRST_DYNAMIC_ZONE_END || id == EVENT_ALL_DYNAMIC_ZONE_END ) )
     {
          mLoadingState = STATE_MISSION_START;
 
@@ -635,7 +636,14 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
             if ( mResetting )
             {
                 //HeapMgr()->PushHeap (GMA_LEVEL_ZONE);   // Is this the right one??  -- jdy
-                mission->InitDynaLoad();
+                if ( mission->GetDynaloadLocator() != NULL )
+                {
+                    mission->InitDynaLoad();
+                }
+                else
+                {
+                    mLoadingState = STATE_MISSION_START;
+                }
                 //HeapMgr()->PopHeap ();
             }
 
@@ -651,6 +659,21 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
         }
     case STATE_WAIT_FOR_DYNALOAD:
         {
+            static int s_dynaloadWatchdog = 0;
+            if( !GetLoadingManager()->IsLoading() && !GetRenderManager()->IsDynaLoading() )
+            {
+                s_dynaloadWatchdog++;
+                if( s_dynaloadWatchdog > 15 )
+                {
+                    rReleasePrintf("MissionManager: Dynaload wait watchdog timeout (%d ticks), advancing to STATE_MISSION_START\n", s_dynaloadWatchdog);
+                    s_dynaloadWatchdog = 0;
+                    mLoadingState = STATE_MISSION_START;
+                }
+            }
+            else
+            {
+                s_dynaloadWatchdog = 0;
+            }
             break;
         }
     case STATE_MISSION_START:

@@ -1011,27 +1011,34 @@ void MusicPlayer::SetUpPerformance(
         radLoadFind< radmusic::radload_composition_adapter >(
             m_radLoadRequest->GetInventory( ), "my_composition" );
             
-    rAssert( NULL != compAdapter );
-    
-    *ppComposition = compAdapter->p_composition;
-    
-    rAssert( NULL != *ppComposition );
-    
-    compAdapter->p_composition = NULL;
+    if ( compAdapter != NULL )
+    {
+        *ppComposition = compAdapter->p_composition;
+        compAdapter->p_composition = NULL;
+    }
+    else
+    {
+        *ppComposition = NULL;
+    }
     
     m_radLoadRequest->Release( );
     m_radLoadRequest = NULL;
             
-    if ( CommandLineOptions::Get( CLO_FIREWIRE ) )
+    if ( *ppComposition != NULL )
     {
-        *ppPerformance = radmusic::performance_new( *ppComposition, searchPath, radMemorySpace_Local );    
+        if ( CommandLineOptions::Get( CLO_FIREWIRE ) )
+        {
+            *ppPerformance = radmusic::performance_new( *ppComposition, searchPath, radMemorySpace_Local );    
+        }
+        else
+        {
+            *ppPerformance = radmusic::performance_new( *ppComposition, searchPath );    
+        }
     }
     else
     {
-        *ppPerformance = radmusic::performance_new( *ppComposition, searchPath );    
+        *ppPerformance = NULL;
     }
-    
-    rAssert( *ppPerformance != NULL );
 }
         
 //=============================================================================
@@ -1090,8 +1097,10 @@ void MusicPlayer::Service()
                 
         m_isLoadingAmbient = false;
 
-        rAssert( radmusic::performance_num_events( m_ambientPerformance ) == AEVENT_NUM_EVENTS );
-
+        if ( m_ambientPerformance != NULL )
+        {
+            rAssert( radmusic::performance_num_events( m_ambientPerformance ) == AEVENT_NUM_EVENTS );
+        }
 
         m_loadCompleteCallback->LoadCompleted();
     }
@@ -2051,6 +2060,11 @@ void MusicPlayer::initializeTableNameKeys()
 //=============================================================================
 void MusicPlayer::buildEventTables()
 {
+    if ( m_musicPerformance == NULL )
+    {
+        return;
+    }
+
     unsigned int i, j;
     unsigned int scriptLength;
     char temp[256];

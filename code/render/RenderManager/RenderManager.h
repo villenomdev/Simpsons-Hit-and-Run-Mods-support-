@@ -112,6 +112,7 @@ public:
    ///////////////////////////////////////////////////////////////////////
    void OnProcessRequestsComplete( void* pUserData );
    bool DoneInitialLoad();
+   bool IsDynaLoading() const { return mbDynaLoading; }
    void DoPostLevelLoad();
 
    ///////////////////////////////////////////////////////////////////////
