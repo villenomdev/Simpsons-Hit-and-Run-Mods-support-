@@ -21,11 +21,12 @@ public:
       Clear();
    }
 
-   SwapArray() : mUseSize(0), mpData(NULL)
+   SwapArray() : mSize(0), mUseSize(0), mpData(NULL)
    {
    }
 
    SwapArray( int iSize ) : 
+    mSize(0),
     mUseSize(0),
     mpData(NULL)
    {
@@ -96,14 +97,44 @@ public:
 
    void Add( T& irVal )
    {
-      ASSSERT(mUseSize<mSize);
+      if( mUseSize >= mSize || mpData == NULL )
+      {
+         int newSize = (mSize <= 0) ? 16 : (mSize * 2);
+         if( newSize < mUseSize + 1 ) newSize = mUseSize + 1;
+         T* newData = new T[newSize];
+         if( mpData != NULL )
+         {
+            for( int i = 0; i < mUseSize; ++i )
+            {
+               newData[i] = mpData[i];
+            }
+            delete[] mpData;
+         }
+         mpData = newData;
+         mSize = newSize;
+      }
       mpData[mUseSize] = irVal;
       mUseSize++;
    }
 
    void Add( const T& irVal )
    {
-      ASSSERT(mUseSize<mSize);
+      if( mUseSize >= mSize || mpData == NULL )
+      {
+         int newSize = (mSize <= 0) ? 16 : (mSize * 2);
+         if( newSize < mUseSize + 1 ) newSize = mUseSize + 1;
+         T* newData = new T[newSize];
+         if( mpData != NULL )
+         {
+            for( int i = 0; i < mUseSize; ++i )
+            {
+               newData[i] = mpData[i];
+            }
+            delete[] mpData;
+         }
+         mpData = newData;
+         mSize = newSize;
+      }
       mpData[mUseSize] = irVal;
       mUseSize++;
    }
@@ -167,6 +198,7 @@ public:
       }
       mpData = NULL;
       mUseSize = 0;
+      mSize = 0;
    }
 
    bool IsSetUp()
@@ -211,11 +243,12 @@ public:
       Clear();
    }
 
-   NodeSwapArray() : mUseSize(0), mpData(NULL)
+   NodeSwapArray() : mSize(0), mUseSize(0), mpData(NULL)
    {
    }
 
    NodeSwapArray( int iSize ) : 
+    mSize(0),
     mUseSize(0),
     mpData(NULL)
    {
@@ -286,8 +319,22 @@ public:
 
    bool Add( T& irVal )
    {
-      if(mUseSize>=mSize)
-          return false;
+      if( mUseSize >= mSize || mpData == NULL )
+      {
+         int newSize = (mSize <= 0) ? 16 : (mSize * 2);
+         if( newSize < mUseSize + 1 ) newSize = mUseSize + 1;
+         T* newData = new T[newSize];
+         if( mpData != NULL )
+         {
+            for( int i = 0; i < mUseSize; ++i )
+            {
+               newData[i] = mpData[i];
+            }
+            delete[] mpData;
+         }
+         mpData = newData;
+         mSize = newSize;
+      }
       mpData[mUseSize] = irVal;
       mUseSize++;
       return true;
@@ -352,6 +399,7 @@ public:
       }
       mpData = NULL;
       mUseSize = 0;
+      mSize = 0;
    }
 
    bool IsSetUp()

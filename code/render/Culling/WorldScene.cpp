@@ -519,9 +519,14 @@ void WorldScene::Add( TriggerVolume*             ipTriggerVolume )
 //////////////////////////////////////////////////////////////////////////
 void WorldScene::Add( RoadSegment*           ipRoadSegment )
 {
+    if( ipRoadSegment == NULL ) return;
     ipRoadSegment->AddRef();
 
     rAssert(IsPostTreeGen());
+    if( !IsPostTreeGen() || mStaticTreeWalker.NumNodes() == 0 )
+    {
+        return;
+    }
 
     Place( ipRoadSegment );
 }
@@ -529,9 +534,14 @@ void WorldScene::Add( RoadSegment*           ipRoadSegment )
 //////////////////////////////////////////////////////////////////////////
 void WorldScene::Add( PathSegment*           ipPathSegment )
 {
+    if( ipPathSegment == NULL ) return;
     ipPathSegment->AddRef();
 
     rAssert(IsPostTreeGen());
+    if( !IsPostTreeGen() || mStaticTreeWalker.NumNodes() == 0 )
+    {
+        return;
+    }
 
     Place( ipPathSegment );
 }
@@ -2146,6 +2156,8 @@ void WorldScene::Place( TriggerVolume*           ipTriggerVolume )
 //////////////////////////////////////////////////////////////////////////
 void WorldScene::Place( RoadSegment*           ipRoadSegment )
 {
+   if( ipRoadSegment == NULL ) return;
+
    BoxPts DrawableSP;
    rmt::Box3D  BBox;
    
@@ -2156,16 +2168,20 @@ void WorldScene::Place( RoadSegment*           ipRoadSegment )
    DrawableSP.mBounds.mMin.Add(mEpsilonOffset);
    DrawableSP.mBounds.mMax.Sub(mEpsilonOffset);
    
-   //mStaticTreeWalker.rSeekNode((ISpatialProxyAA&)DrawableSP).mRoadSegmentElems.Add(ipRoadSegment);
    SpatialNode* pSpatialNode = &(mStaticTreeWalker.rSeekNode((ISpatialProxyAA&)DrawableSP));
-   pSpatialNode->mRoadSegmentElems.Add(ipRoadSegment);
-   ipRoadSegment->mpSpatialNode = pSpatialNode;
+   if( pSpatialNode != NULL )
+   {
+      pSpatialNode->mRoadSegmentElems.Add(ipRoadSegment);
+      ipRoadSegment->mpSpatialNode = pSpatialNode;
+   }
 }
 
 ////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 void WorldScene::Place( PathSegment*           ipPathSegment )
 {
+   if( ipPathSegment == NULL ) return;
+
    BoxPts DrawableSP;
    rmt::Box3D  BBox;
    
@@ -2176,10 +2192,12 @@ void WorldScene::Place( PathSegment*           ipPathSegment )
    DrawableSP.mBounds.mMin.Add(mEpsilonOffset);
    DrawableSP.mBounds.mMax.Sub(mEpsilonOffset);
    
-   //mStaticTreeWalker.rSeekNode((ISpatialProxyAA&)DrawableSP).mPathSegmentElems.Add(ipPathSegment);
    SpatialNode* pSpatialNode = &(mStaticTreeWalker.rSeekNode((ISpatialProxyAA&)DrawableSP));
-   pSpatialNode->mPathSegmentElems.Add(ipPathSegment);
-   ipPathSegment->mpSpatialNode = pSpatialNode;
+   if( pSpatialNode != NULL )
+   {
+      pSpatialNode->mPathSegmentElems.Add(ipPathSegment);
+      ipPathSegment->mpSpatialNode = pSpatialNode;
+   }
 }
 
 ////////////////////////////////////////////////////////////////////

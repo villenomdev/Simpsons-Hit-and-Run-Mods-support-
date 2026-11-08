@@ -142,6 +142,11 @@ MEMTRACK_POP_GROUP( "Road Loading" );
 
         unsigned int tmpNumLanes = 0;
         RoadSegment* segment = LoadRoadSegment( f, tmpNumLanes );
+        if( segment == NULL )
+        {
+            f->EndChunk();
+            continue;
+        }
 
         if( firstSeg )
         {
@@ -517,10 +522,18 @@ MEMTRACK_PUSH_GROUP( "RoadSeg Loader" );
     RoadManager* rm = RoadManager::GetInstance();
   
     RoadSegmentData* rsd = rm->FindRoadSegmentData( segDataName );
-    rAssert( rsd );
+    if( rsd == NULL )
+    {
+        MEMTRACK_POP_GROUP( "RoadSeg Loader" );
+        return NULL;
+    }
   
     RoadSegment* rs = rm->GetFreeRoadSegmentMemory();
-    rAssert( rs );
+    if( rs == NULL )
+    {
+        MEMTRACK_POP_GROUP( "RoadSeg Loader" );
+        return NULL;
+    }
 
     rs->SetName( name );
     rs->Init( rsd, hierarchy, scaleAlongFacing );
@@ -534,7 +547,10 @@ MEMTRACK_POP_GROUP( "RoadSeg Loader" );
 
     // DSG stuff
 #ifndef TOOLS
-    mpListenerCB->OnChunkLoaded( rs, mUserData, SRR2::ChunkID::ROAD_SEGMENT );
+    if( mpListenerCB != NULL )
+    {
+        mpListenerCB->OnChunkLoaded( rs, mUserData, SRR2::ChunkID::ROAD_SEGMENT );
+    }
 #endif
 
     sNumRoadSegmentsLoaded++;

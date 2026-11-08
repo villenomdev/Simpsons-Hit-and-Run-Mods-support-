@@ -662,11 +662,19 @@ void WorldRenderLayer::AddGuts( TriggerVolume* ipTriggerVolume )
 //========================================================================
 void WorldRenderLayer::AddGuts( RoadSegment* ipRoadSegment )
 {
-   mpWorldScene->Add( ipRoadSegment );
+   if( ipRoadSegment == NULL ) return;
+
+   if( mpWorldScene != NULL )
+   {
+      mpWorldScene->Add( ipRoadSegment );
+   }
 
    if(mDynaLoadState==msLoad)
    {
-      mLoadLists[mCurLoadIndex]->mRoadSegmentElems.Add(ipRoadSegment);      
+      if( mCurLoadIndex >= 0 && mCurLoadIndex < (int)mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+      {
+         mLoadLists[mCurLoadIndex]->mRoadSegmentElems.Add(ipRoadSegment);      
+      }
    }
    else
    {
@@ -690,11 +698,19 @@ void WorldRenderLayer::AddGuts( RoadSegment* ipRoadSegment )
 //========================================================================
 void WorldRenderLayer::AddGuts( PathSegment* ipPathSegment )
 {
-   mpWorldScene->Add( ipPathSegment );
+   if( ipPathSegment == NULL ) return;
+
+   if( mpWorldScene != NULL )
+   {
+      mpWorldScene->Add( ipPathSegment );
+   }
 
    if(mDynaLoadState==msLoad)
    {
-      mLoadLists[mCurLoadIndex]->mPathSegmentElems.Add(ipPathSegment);      
+      if( mCurLoadIndex >= 0 && mCurLoadIndex < (int)mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+      {
+         mLoadLists[mCurLoadIndex]->mPathSegmentElems.Add(ipPathSegment);      
+      }
    }
    else
    {
