@@ -22,20 +22,42 @@ public class SimpsonsActivity extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         checkAndRequestStoragePermissions();
-        ensureModsDirectory();
+        ensureStorageDirectories();
     }
 
-    private void ensureModsDirectory() {
+    @Override
+    protected void onResume() {
+        super.onResume();
+        ensureStorageDirectories();
+    }
+
+    private void ensureStorageDirectories() {
         try {
-            File modsDir = new File(Environment.getExternalStorageDirectory(), "simpsons_mods");
+            File rootDir = new File(Environment.getExternalStorageDirectory(), "Simpsons Hit and Run");
+            File filesDir = new File(rootDir, "files");
+            File modsDir = new File(rootDir, "mods");
+
+            if (!filesDir.exists()) {
+                boolean created = filesDir.mkdirs();
+                Log.i(TAG, "Created files directory: " + filesDir.getAbsolutePath() + " (" + created + ")");
+            } else {
+                Log.i(TAG, "files directory exists: " + filesDir.getAbsolutePath());
+            }
+
             if (!modsDir.exists()) {
                 boolean created = modsDir.mkdirs();
-                Log.i(TAG, "Created simpsons_mods directory: " + modsDir.getAbsolutePath() + " (" + created + ")");
+                Log.i(TAG, "Created mods directory: " + modsDir.getAbsolutePath() + " (" + created + ")");
             } else {
-                Log.i(TAG, "simpsons_mods directory exists: " + modsDir.getAbsolutePath());
+                Log.i(TAG, "mods directory exists: " + modsDir.getAbsolutePath());
+            }
+
+            // Legacy directory backward compatibility
+            File legacyModsDir = new File(Environment.getExternalStorageDirectory(), "simpsons_mods");
+            if (!legacyModsDir.exists()) {
+                legacyModsDir.mkdirs();
             }
         } catch (Exception e) {
-            Log.e(TAG, "Failed to create simpsons_mods directory", e);
+            Log.e(TAG, "Failed to create storage directories", e);
         }
     }
 

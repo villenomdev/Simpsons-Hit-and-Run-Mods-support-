@@ -69,13 +69,17 @@ static void LogPathStatus(const char* label, const char* path)
 }
 
 //=============================================================================
-// Android Mod Loader Subsystem
+// Android Mod Loader Subsystem & Fallback Paths
 //=============================================================================
 static bool s_ModsEnabled = true;
-static char s_ModsDirectory[512] = "/storage/emulated/0/simpsons_mods";
+static char s_ModsDirectory[512] = "/storage/emulated/0/Simpsons Hit and Run/mods";
 static char s_ActiveMod[256] = "";
-static std::vector<std::string> s_DiscoveredModFolders;
-static bool s_ModFoldersScanned = false;
+static std::vector<std::string> s_DiscoveredModFoldersPrimary;
+static std::vector<std::string> s_DiscoveredModFoldersFallback;
+static bool s_PrimaryModFoldersScanned = false;
+static bool s_FallbackModFoldersScanned = false;
+
+static char s_FallbackGameDir[512] = "";
 
 void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod )
 {
@@ -90,7 +94,8 @@ void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* ac
         strncpy( s_ActiveMod, activeMod, sizeof( s_ActiveMod ) - 1 );
         s_ActiveMod[ sizeof( s_ActiveMod ) - 1 ] = '\0';
     }
-    s_ModFoldersScanned = false;
+    s_PrimaryModFoldersScanned = false;
+    s_FallbackModFoldersScanned = false;
     LOGI("[Mods] Config updated: enabled=%d, dir='%s', active_mod='%s'",
          s_ModsEnabled ? 1 : 0, s_ModsDirectory, s_ActiveMod);
 }
@@ -182,6 +187,115 @@ static bool CheckModCandidate( const char* basePath, const char* subPath, const 
     return false;
 }
 
+static bool SearchModInDirectory( const char* modsDir,
+                                  std::vector<std::string>& discoveredFolders,
+                                  bool& scannedFlag,
+                                  const char* cname,
+                                  char* outPath,
+                                  size_t outSize )
+{
+    if( modsDir == NULL || modsDir[0] == '\0' )
+    {
+        return false;
+    }
+
+    struct stat st;
+    if( stat( modsDir, &st ) != 0 || !S_ISDIR( st.st_mode ) )
+    {
+        return false;
+    }
+
+    // 1. If an active mod is configured, check inside that mod folder
+    if( s_ActiveMod[0] != '\0' && strcmp( s_ActiveMod, "none" ) != 0 )
+    {
+        // 1a. Check <mods_dir>/<active_mod>/CustomFiles/<file> (LMLM format)
+        char sub[512];
+        snprintf( sub, sizeof(sub), "%s/CustomFiles", s_ActiveMod );
+        if( CheckModCandidate( modsDir, sub, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+
+        // 1b. Check <mods_dir>/<active_mod>/<file>
+        if( CheckModCandidate( modsDir, s_ActiveMod, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+    }
+
+    // 2. Check root of mods_directory with CustomFiles
+    if( CheckModCandidate( modsDir, "CustomFiles", cname, outPath, outSize ) )
+    {
+        return true;
+    }
+
+    // 3. Check root of mods_directory directly
+    if( CheckModCandidate( modsDir, NULL, cname, outPath, outSize ) )
+    {
+        return true;
+    }
+
+    // 4. Auto-discover mod subfolders in mods_directory (e.g. unzipped folders)
+    if( !scannedFlag )
+    {
+        discoveredFolders.clear();
+        DIR* dir = opendir( modsDir );
+        if( dir != NULL )
+        {
+            struct dirent* ent;
+            while( ( ent = readdir( dir ) ) != NULL )
+            {
+                if( ent->d_name[0] == '.' )
+                {
+                    continue;
+                }
+                char fullDir[1024];
+                snprintf( fullDir, sizeof(fullDir), "%s/%s", modsDir, ent->d_name );
+                struct stat entSt;
+                if( stat( fullDir, &entSt ) == 0 && S_ISDIR( entSt.st_mode ) )
+                {
+                    if( strcasecmp( ent->d_name, "CustomFiles" ) != 0 )
+                    {
+                        discoveredFolders.push_back( ent->d_name );
+                        LOGI("[Mods] Auto-discovered mod directory in '%s': '%s'", modsDir, ent->d_name);
+                    }
+                }
+            }
+            closedir( dir );
+        }
+        scannedFlag = true;
+    }
+
+    for( size_t i = 0; i < discoveredFolders.size(); ++i )
+    {
+        const char* folder = discoveredFolders[i].c_str();
+
+        // Check <mods_dir>/<folder>/CustomFiles/<file>
+        char sub[512];
+        snprintf( sub, sizeof(sub), "%s/CustomFiles", folder );
+        if( CheckModCandidate( modsDir, sub, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+
+        // Check <mods_dir>/<folder>/<folder>/CustomFiles/<file> (double folder extraction)
+        char nestedSub[512];
+        snprintf( nestedSub, sizeof(nestedSub), "%s/%s/CustomFiles", folder, folder );
+        if( CheckModCandidate( modsDir, nestedSub, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+
+        // Check <mods_dir>/<folder>/<file>
+        if( CheckModCandidate( modsDir, folder, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static bool FindModFile( const char* rawFileName, char* outPath, size_t outSize )
 {
     if( !s_ModsEnabled || rawFileName == NULL || rawFileName[0] == '\0' )
@@ -204,95 +318,86 @@ static bool FindModFile( const char* rawFileName, char* outPath, size_t outSize 
 
     const char* cname = cleanName.c_str();
 
-    // 1. If an active mod is configured, check inside that mod folder
-    if( s_ActiveMod[0] != '\0' && strcmp( s_ActiveMod, "none" ) != 0 )
-    {
-        // 1a. Check <mods_dir>/<active_mod>/CustomFiles/<file> (LMLM format)
-        char sub[512];
-        snprintf( sub, sizeof(sub), "%s/CustomFiles", s_ActiveMod );
-        if( CheckModCandidate( s_ModsDirectory, sub, cname, outPath, outSize ) )
-        {
-            return true;
-        }
-
-        // 1b. Check <mods_dir>/<active_mod>/<file>
-        if( CheckModCandidate( s_ModsDirectory, s_ActiveMod, cname, outPath, outSize ) )
-        {
-            return true;
-        }
-    }
-
-    // 2. Check root of mods_directory with CustomFiles
-    if( CheckModCandidate( s_ModsDirectory, "CustomFiles", cname, outPath, outSize ) )
+    // 1. Check primary configured mods directory (default: /storage/emulated/0/Simpsons Hit and Run/mods)
+    if( SearchModInDirectory( s_ModsDirectory, s_DiscoveredModFoldersPrimary, s_PrimaryModFoldersScanned, cname, outPath, outSize ) )
     {
         return true;
     }
 
-    // 3. Check root of mods_directory directly
-    if( CheckModCandidate( s_ModsDirectory, NULL, cname, outPath, outSize ) )
+    // 2. Check legacy fallback directory (/storage/emulated/0/simpsons_mods) if distinct
+    const char* legacyDir = "/storage/emulated/0/simpsons_mods";
+    if( strcmp( s_ModsDirectory, legacyDir ) != 0 )
     {
-        return true;
-    }
-
-    // 4. Auto-discover mod subfolders in mods_directory (e.g. unzipped folders)
-    if( !s_ModFoldersScanned )
-    {
-        s_DiscoveredModFolders.clear();
-        DIR* dir = opendir( s_ModsDirectory );
-        if( dir != NULL )
-        {
-            struct dirent* ent;
-            while( ( ent = readdir( dir ) ) != NULL )
-            {
-                if( ent->d_name[0] == '.' )
-                {
-                    continue;
-                }
-                char fullDir[1024];
-                snprintf( fullDir, sizeof(fullDir), "%s/%s", s_ModsDirectory, ent->d_name );
-                struct stat st;
-                if( stat( fullDir, &st ) == 0 && S_ISDIR( st.st_mode ) )
-                {
-                    if( strcasecmp( ent->d_name, "CustomFiles" ) != 0 )
-                    {
-                        s_DiscoveredModFolders.push_back( ent->d_name );
-                        LOGI("[Mods] Auto-discovered mod directory: '%s'", ent->d_name);
-                    }
-                }
-            }
-            closedir( dir );
-        }
-        s_ModFoldersScanned = true;
-    }
-
-    for( size_t i = 0; i < s_DiscoveredModFolders.size(); ++i )
-    {
-        const char* folder = s_DiscoveredModFolders[i].c_str();
-
-        // Check <mods_dir>/<folder>/CustomFiles/<file>
-        char sub[512];
-        snprintf( sub, sizeof(sub), "%s/CustomFiles", folder );
-        if( CheckModCandidate( s_ModsDirectory, sub, cname, outPath, outSize ) )
-        {
-            return true;
-        }
-
-        // Check <mods_dir>/<folder>/<folder>/CustomFiles/<file> (double folder extraction)
-        char nestedSub[512];
-        snprintf( nestedSub, sizeof(nestedSub), "%s/%s/CustomFiles", folder, folder );
-        if( CheckModCandidate( s_ModsDirectory, nestedSub, cname, outPath, outSize ) )
-        {
-            return true;
-        }
-
-        // Check <mods_dir>/<folder>/<file>
-        if( CheckModCandidate( s_ModsDirectory, folder, cname, outPath, outSize ) )
+        if( SearchModInDirectory( legacyDir, s_DiscoveredModFoldersFallback, s_FallbackModFoldersScanned, cname, outPath, outSize ) )
         {
             return true;
         }
     }
 
     return false;
+}
+
+static bool CheckFallbackGamePath( const char* rawFileName, char* outPath, size_t outSize )
+{
+    if( s_FallbackGameDir[0] == '\0' || rawFileName == NULL || rawFileName[0] == '\0' )
+    {
+        return false;
+    }
+
+    std::string cleanName( rawFileName );
+    std::replace( cleanName.begin(), cleanName.end(), '\\', '/' );
+    while( !cleanName.empty() && ( cleanName[0] == '/' || cleanName[0] == '.' ) )
+    {
+        cleanName.erase( 0, 1 );
+    }
+
+    if( cleanName.empty() )
+    {
+        return false;
+    }
+
+    return CheckModCandidate( s_FallbackGameDir, NULL, cleanName.c_str(), outPath, outSize );
+}
+
+static bool DirectoryHasGameFiles( const char* dirPath )
+{
+    if( dirPath == NULL || dirPath[0] == '\0' )
+    {
+        return false;
+    }
+
+    DIR* dir = opendir( dirPath );
+    if( dir == NULL )
+    {
+        return false;
+    }
+
+    bool hasFiles = false;
+    struct dirent* ent;
+    while( ( ent = readdir( dir ) ) != NULL )
+    {
+        if( ent->d_name[0] == '.' )
+        {
+            continue;
+        }
+
+        const char* dot = strrchr( ent->d_name, '.' );
+        if( dot != NULL && strcasecmp( dot, ".rcf" ) == 0 )
+        {
+            hasFiles = true;
+            break;
+        }
+
+        if( strcasecmp( ent->d_name, "scripts" ) == 0 ||
+            strcasecmp( ent->d_name, "art" ) == 0 ||
+            strcasecmp( ent->d_name, "sound" ) == 0 )
+        {
+            hasFiles = true;
+            break;
+        }
+    }
+    closedir( dir );
+    return hasFiles;
 }
 #else
 void radSdlDriveSetModsConfig( bool, const char*, const char* ) {}
@@ -538,25 +643,53 @@ radSdlDrive::radSdlDrive(const char* pdrivespec, radMemoryAllocator alloc)
 #endif
 
     // ============================================================
-    // CAMBIO AQUÍ: En Android FORZAMOS SIEMPRE el root al external
-    // storage "Android/data/<package>/files/" usando SDL.
+    // Android: Use unified shared storage "Simpsons Hit and Run/files/"
+    // with automatic fallback to legacy "Android/data/<pkg>/files/".
     // ============================================================
 #if defined(RAD_ANDROID)
+    mkdir( "/storage/emulated/0/Simpsons Hit and Run", 0777 );
+    mkdir( "/storage/emulated/0/Simpsons Hit and Run/files", 0777 );
+    mkdir( "/storage/emulated/0/Simpsons Hit and Run/mods", 0777 );
+    mkdir( "/storage/emulated/0/simpsons_mods", 0777 );
 
-    // CAMBIO AQUÍ: usamos SDL_AndroidGetExternalStoragePath (SDL_system.h)
+    const char* publicFiles = "/storage/emulated/0/Simpsons Hit and Run/files/";
     const char* ext = SDL_AndroidGetExternalStoragePath();
 
-    if (ext && ext[0])
+    bool publicHasFiles = DirectoryHasGameFiles( "/storage/emulated/0/Simpsons Hit and Run/files" );
+    bool legacyHasFiles = ( ext && ext[0] ) ? DirectoryHasGameFiles( ext ) : false;
+
+    if( publicHasFiles )
     {
-        
-		strncpy(m_DrivePath, ext, radFileFilenameMax);
-        m_DrivePath[radFileFilenameMax] = '\0'; // CAMBIO AQUÍ
+        strncpy( m_DrivePath, publicFiles, radFileFilenameMax );
+        m_DrivePath[ radFileFilenameMax ] = '\0';
+
+        if( ext && ext[0] )
+        {
+            strncpy( s_FallbackGameDir, ext, sizeof( s_FallbackGameDir ) - 1 );
+            s_FallbackGameDir[ sizeof( s_FallbackGameDir ) - 1 ] = '\0';
+        }
+        LOGI("[Drive] Active root: public folder '%s' (fallback: '%s')", m_DrivePath, s_FallbackGameDir);
+    }
+    else if( legacyHasFiles )
+    {
+        strncpy( m_DrivePath, ext, radFileFilenameMax );
+        m_DrivePath[ radFileFilenameMax ] = '\0';
+
+        strncpy( s_FallbackGameDir, publicFiles, sizeof( s_FallbackGameDir ) - 1 );
+        s_FallbackGameDir[ sizeof( s_FallbackGameDir ) - 1 ] = '\0';
+        LOGI("[Drive] Active root: legacy external storage '%s' (fallback: '%s')", m_DrivePath, s_FallbackGameDir);
     }
     else
     {
-        // CAMBIO AQUÍ: fallback por si SDL devuelve null (raro)
-        strncpy(m_DrivePath, "/storage/emulated/0/Android/data/com.c4rlox.simpsons/files/", radFileFilenameMax);
-        m_DrivePath[radFileFilenameMax] = '\0';
+        strncpy( m_DrivePath, publicFiles, radFileFilenameMax );
+        m_DrivePath[ radFileFilenameMax ] = '\0';
+
+        if( ext && ext[0] )
+        {
+            strncpy( s_FallbackGameDir, ext, sizeof( s_FallbackGameDir ) - 1 );
+            s_FallbackGameDir[ sizeof( s_FallbackGameDir ) - 1 ] = '\0';
+        }
+        LOGI("[Drive] Defaulting root to public folder: '%s'", m_DrivePath);
     }
 
 #else
@@ -588,6 +721,13 @@ radSdlDrive::radSdlDrive(const char* pdrivespec, radMemoryAllocator alloc)
     if (len > 0 && m_DrivePath[len - 1] != '/' && len < radFileFilenameMax) {
         strncat(m_DrivePath, "/", radFileFilenameMax - len - 1);
     }
+
+#if defined(RAD_ANDROID)
+    size_t fLen = strlen(s_FallbackGameDir);
+    if (fLen > 0 && s_FallbackGameDir[fLen - 1] != '/' && fLen < sizeof(s_FallbackGameDir)) {
+        strncat(s_FallbackGameDir, "/", sizeof(s_FallbackGameDir) - fLen - 1);
+    }
+#endif
 
 #if SDL_MAJOR_VERSION < 3
     m_Capabilities = (radDriveWriteable | radDriveFile);
@@ -712,6 +852,16 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
         LOGI("[Mods] Intercepted file: '%s' -> '%s'", fileName, modFileSpec);
         strncpy( fullName, modFileSpec, radFileFilenameMax );
         fullName[ radFileFilenameMax ] = '\0';
+    }
+    else if( flags == OpenExisting && access( fullName, R_OK ) != 0 )
+    {
+        char fallbackSpec[ 1024 ];
+        if( CheckFallbackGamePath( fileName, fallbackSpec, sizeof(fallbackSpec) ) )
+        {
+            LOGI("[Drive] Fallback game file: '%s' -> '%s'", fileName, fallbackSpec);
+            strncpy( fullName, fallbackSpec, radFileFilenameMax );
+            fullName[ radFileFilenameMax ] = '\0';
+        }
     }
 #endif
 

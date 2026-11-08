@@ -260,6 +260,7 @@ static std::string RadMakeAbsoluteGamePath(const char* path)
 #ifdef RAD_ANDROID
 #include <SDL_system.h>
 #include <string>
+#include <unistd.h>
 
 static std::string RadMakeAbsoluteGamePath(const char* path)
 {
@@ -271,31 +272,34 @@ static std::string RadMakeAbsoluteGamePath(const char* path)
     if (p[0] == '/' || (p.size() >= 2 && p[1] == ':') || p.find("://") != std::string::npos)
         return p;
 
-    const char* ext = SDL_AndroidGetExternalStoragePath();
+    while (!p.empty() && p[0] == '/')
+    {
+        p.erase(0, 1);
+    }
 
-    std::string base;
+    // 1. Check in primary public folder: /storage/emulated/0/Simpsons Hit and Run/files/
+    std::string primary = std::string("/storage/emulated/0/Simpsons Hit and Run/files/") + p;
+    if (access(primary.c_str(), R_OK) == 0)
+    {
+        return primary;
+    }
+
+    // 2. Check in SDL external storage path (Android/data/com.c4rlox.simpsons/files/)
+    const char* ext = SDL_AndroidGetExternalStoragePath();
     if (ext && ext[0])
     {
-        base = ext;
-    }
-    else
-    {
-        base = "/storage/emulated/0";
-    }
-
-    for (char& c : base) if (c == '\\') c = '/';
-
-    // Si SDL solo devuelve "/storage/emulated/0", completamos como haces con el drive “ideal”
-    if (base.find("/Android/data/") == std::string::npos)
-    {
-        // OJO: aquí sí tienes hardcodeado el package (igual que en tu fallback actual)
-        base += "/Android/data/org.libsdl.app/files";
+        std::string base = ext;
+        for (char& c : base) if (c == '\\') c = '/';
+        if (!base.empty() && base.back() != '/') base.push_back('/');
+        std::string secondary = base + p;
+        if (access(secondary.c_str(), R_OK) == 0)
+        {
+            return secondary;
+        }
     }
 
-    if (!base.empty() && base.back() != '/')
-        base.push_back('/');
-
-    return base + p;
+    // Default to primary public path
+    return primary;
 }
 #endif
 

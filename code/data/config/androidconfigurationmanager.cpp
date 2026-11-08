@@ -46,7 +46,7 @@ AndroidConfigurationManager::AndroidConfigurationManager()
     m_enableMods( true ),
     m_dirty( false )
 {
-    strncpy( m_modsPath, "/storage/emulated/0/simpsons_mods", sizeof( m_modsPath ) );
+    strncpy( m_modsPath, "/storage/emulated/0/Simpsons Hit and Run/mods", sizeof( m_modsPath ) );
     m_modsPath[ sizeof( m_modsPath ) - 1 ] = '\0';
     m_activeMod[ 0 ] = '\0';
 
@@ -63,7 +63,7 @@ void AndroidConfigurationManager::SetDefaults()
     m_gamepadVibration = true;
     m_phoneVibration = false;
     m_enableMods = true;
-    strncpy( m_modsPath, "/storage/emulated/0/simpsons_mods", sizeof( m_modsPath ) );
+    strncpy( m_modsPath, "/storage/emulated/0/Simpsons Hit and Run/mods", sizeof( m_modsPath ) );
     m_modsPath[ sizeof( m_modsPath ) - 1 ] = '\0';
     m_activeMod[ 0 ] = '\0';
     m_dirty = false;
@@ -79,6 +79,12 @@ void AndroidConfigurationManager::Initialize()
     this->SetDefaults();
 
 #if defined(RAD_ANDROID)
+    // Ensure all base directories exist
+    mkdir( "/storage/emulated/0/Simpsons Hit and Run", 0777 );
+    mkdir( "/storage/emulated/0/Simpsons Hit and Run/files", 0777 );
+    mkdir( "/storage/emulated/0/Simpsons Hit and Run/mods", 0777 );
+    mkdir( "/storage/emulated/0/simpsons_mods", 0777 );
+
     if( !this->BuildPaths() )
     {
         m_initialized = true;
@@ -248,11 +254,50 @@ void AndroidConfigurationManager::SetActiveMod( const char* modName )
 
 bool AndroidConfigurationManager::BuildPaths()
 {
-    const char* basePath = SDL_AndroidGetExternalStoragePath();
+    const char* publicBase = "/storage/emulated/0/Simpsons Hit and Run";
+    const char* extBase = SDL_AndroidGetExternalStoragePath();
+    const char* basePath = NULL;
 
-    if( basePath == NULL || basePath[ 0 ] == '\0' )
+    // Check if configuration already exists in public folder
+    char testPublicPath[ 512 ];
+    snprintf( testPublicPath, sizeof( testPublicPath ), "%s/%s/%s", publicBase, CONFIGURATION_FOLDER_NAME, CONFIGURATION_FILE_NAME );
+
+    // Check if configuration already exists in legacy folder
+    char testLegacyPath[ 512 ];
+    if( extBase && extBase[ 0 ] )
     {
-        basePath = SDL_AndroidGetInternalStoragePath();
+        snprintf( testLegacyPath, sizeof( testLegacyPath ), "%s/%s/%s", extBase, CONFIGURATION_FOLDER_NAME, CONFIGURATION_FILE_NAME );
+    }
+    else
+    {
+        testLegacyPath[ 0 ] = '\0';
+    }
+
+    if( access( testPublicPath, R_OK ) == 0 )
+    {
+        basePath = publicBase;
+    }
+    else if( testLegacyPath[ 0 ] != '\0' && access( testLegacyPath, R_OK ) == 0 )
+    {
+        basePath = extBase;
+    }
+    else
+    {
+        // Default to public base directory
+        mkdir( publicBase, 0777 );
+        struct stat st;
+        if( stat( publicBase, &st ) == 0 && S_ISDIR( st.st_mode ) )
+        {
+            basePath = publicBase;
+        }
+        else if( extBase && extBase[ 0 ] )
+        {
+            basePath = extBase;
+        }
+        else
+        {
+            basePath = SDL_AndroidGetInternalStoragePath();
+        }
     }
 
     if( basePath == NULL || basePath[ 0 ] == '\0' )
@@ -364,9 +409,9 @@ void AndroidConfigurationManager::WriteConfigurationFile()
     fprintf( file, "# ------------------------------------------------------------\n" );
     fprintf( file, "# enable_mods: true/false (load mods and loose files)\n" );
     fprintf( file, "enable_mods=%s\n", m_enableMods ? "true" : "false" );
-    fprintf( file, "# mods_directory: Folder path on internal storage for mods\n" );
+    fprintf( file, "# mods_directory: Folder path on internal storage for mods (default: /storage/emulated/0/Simpsons Hit and Run/mods)\n" );
     fprintf( file, "mods_directory=%s\n", m_modsPath );
-    fprintf( file, "# active_mod: Name of active mod folder (leave empty to load files directly from mods_directory)\n" );
+    fprintf( file, "# active_mod: Name of active mod folder (leave empty for auto-discovery)\n" );
     fprintf( file, "active_mod=%s\n", m_activeMod );
 
     fclose( file );
