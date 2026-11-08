@@ -7,6 +7,7 @@
     #include <SDL.h>
     #include <sys/stat.h>
     #include <errno.h>
+    #include <unistd.h>
 
 extern void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod );
 #else
