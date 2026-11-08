@@ -672,13 +672,37 @@ void GameplayManager::PlaceCharacterAtLocator( Character* character,
 void GameplayManager::PlaceVehicleAtLocator( Vehicle* vehicle, 
                                              CarStartLocator* locator )
 {
-    rAssert( vehicle != NULL );
+    if( vehicle == NULL )
+    {
+        return;
+    }
 
-    rAssert( locator != NULL );
+    rmt::Vector pos( 0.0f, 0.0f, 0.0f );
+    float rotation = 0.0f;
 
-    rmt::Vector pos;
-
-    locator->GetLocation( &pos );
+    if( locator != NULL )
+    {
+        locator->GetLocation( &pos );
+        rotation = locator->GetRotation();
+    }
+    else
+    {
+        // Fallback: try finding any CarStartLocator in inventory or player position
+        CarStartLocator* anyLoc = p3d::find<CarStartLocator>( "level_carstart" );
+        if( anyLoc == NULL )
+        {
+            anyLoc = p3d::find<CarStartLocator>( "level1_carstart" );
+        }
+        if( anyLoc != NULL )
+        {
+            anyLoc->GetLocation( &pos );
+            rotation = anyLoc->GetRotation();
+        }
+        else if( GetAvatarManager()->GetAvatarForPlayer(0) != NULL )
+        {
+            GetAvatarManager()->GetAvatarForPlayer(0)->GetPosition( pos );
+        }
+    }
     
     // fucking butt-ugly hack, 4 days after scheduled final, to deal with setting an AI car ontop of user's car
     
@@ -704,7 +728,6 @@ void GameplayManager::PlaceVehicleAtLocator( Vehicle* vehicle,
     }
                
     vehicle->SetInitialPositionGroundOffsetAutoAdjust( &pos );
-    float rotation = locator->GetRotation();
     vehicle->SetResetFacingInRadians( rotation );
     vehicle->Reset( false );
    
@@ -782,12 +805,33 @@ void GameplayManager::PlaceVehicleAtLocation( Vehicle* vehicle, rmt::Vector pos,
 void GameplayManager::PlaceVehicleAtLocatorName( Vehicle* vehicle, 
                                                  const char* locatorName )
 {
-    CarStartLocator* loc = p3d::find<CarStartLocator>( locatorName );
+    if( vehicle == NULL )
+    {
+        return;
+    }
+
+    CarStartLocator* loc = NULL;
+    if( locatorName != NULL )
+    {
+        loc = p3d::find<CarStartLocator>( locatorName );
+        if( loc == NULL )
+        {
+            // Smart locator fallbacks for mods
+            if( strstr( locatorName, "level1_carstart" ) != NULL )
+            {
+                loc = p3d::find<CarStartLocator>( "level_carstart" );
+            }
+            else if( strstr( locatorName, "level_carstart" ) != NULL )
+            {
+                loc = p3d::find<CarStartLocator>( "level1_carstart" );
+            }
+        }
+    }
     #ifndef FINAL
         char outputbuffer [255];
         if (loc == NULL)
         {
-            sprintf(outputbuffer,"Error:Locator %s cannot be found, Make sure its loaded!\n",locatorName);
+            sprintf(outputbuffer,"Error:Locator %s cannot be found, Make sure its loaded!\n",locatorName ? locatorName : "NULL");
             rTuneAssertMsg(0,outputbuffer);
         }
     #endif

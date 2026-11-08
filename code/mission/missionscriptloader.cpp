@@ -775,15 +775,11 @@ void MissionScriptLoader::InitLevelPlayerVehicle( int argc, const char** argv )
         {
             vehicle = GetGameplayManager()->AddLevelVehicle( vehicleName,eslot, 0 );
         }        
-        GetGameplayManager()->SetCurrentVehicle(vehicle);
-        
-        // the mDefaultVehicle member data is old daryll legacy bs
-        //if(eslot == GameplayManager::eDefaultCar)
-        //{
-        //    strcpy(GetGameplayManager()->mDefaultVehicle,vehicleName);
-        //}
-        
-        GetGameplayManager()->PlaceVehicleAtLocatorName( vehicle, locator );
+        if( vehicle != NULL )
+        {
+            GetGameplayManager()->SetCurrentVehicle(vehicle);
+            GetGameplayManager()->PlaceVehicleAtLocatorName( vehicle, locator );
+        }
     }
     //non empty ptr
     else
@@ -851,8 +847,10 @@ void MissionScriptLoader::PlacePlayerCar( int argc, const char** argv )
          
     }
    
-    rAssert(vehicle != NULL);   
-    GetGameplayManager()->PlaceVehicleAtLocatorName( vehicle, locator );
+    if( vehicle != NULL )
+    {
+        GetGameplayManager()->PlaceVehicleAtLocatorName( vehicle, locator );
+    }
     
   
 }
