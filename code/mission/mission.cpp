@@ -1477,38 +1477,76 @@ void Mission::Reset( bool jumpStage )
 void Mission::ResetPlayer()
 {
     //This is where we get the reset data and apply it.  Sounds good eh?
-    Character* player = GetCharacterManager()->GetCharacter( 0 ); //This is the player...
-    Vehicle* car = GetGameplayManager()->GetCurrentVehicle(); //Current car
+    Character* player = ( GetCharacterManager() != NULL ) ? GetCharacterManager()->GetCharacter( 0 ) : NULL;
+    Vehicle* car = ( GetGameplayManager() != NULL ) ? GetGameplayManager()->GetCurrentVehicle() : NULL;
 
-    if( mVehicleRestart != NULL )
+    if( mVehicleRestart != NULL && car != NULL )
     {
         GetGameplayManager()->PlaceVehicleAtLocator( car, mVehicleRestart );
-
     }
 
-    //if ( mPlayerRestart == NULL || IsForcedCar() || IsRaceMission() )
     if ( mPlayerRestart == NULL || IsRaceMission() )
     {
-        rmt::Vector pos;
-        mVehicleRestart->GetLocation( &pos );
-        player->RelocateAndReset( pos, 0, true );
-        if (GetGameplayManager()->GetCurrentVehicle()->mVehicleDestroyed != true)
+        rmt::Vector pos( 0.0f, 0.0f, 0.0f );
+        bool hasPos = false;
+
+        if( mVehicleRestart != NULL )
         {
-            GetAvatarManager()->PutCharacterInCar( player, car );
+            mVehicleRestart->GetLocation( &pos );
+            hasPos = true;
+        }
+        else if( mPlayerRestart != NULL )
+        {
+            mPlayerRestart->GetLocation( &pos );
+            hasPos = true;
+        }
+        else
+        {
+            // Fallback: search for start locator in Pure3D inventory
+            CarStartLocator* anyLoc = p3d::find<CarStartLocator>( "level_carstart" );
+            if( anyLoc == NULL ) anyLoc = p3d::find<CarStartLocator>( "level1_carstart" );
+            if( anyLoc != NULL )
+            {
+                anyLoc->GetLocation( &pos );
+                hasPos = true;
+            }
+        }
+
+        if( player != NULL && hasPos )
+        {
+            player->RelocateAndReset( pos, 0, true );
+            if ( car != NULL && !car->mVehicleDestroyed )
+            {
+                if( GetAvatarManager() != NULL )
+                {
+                    GetAvatarManager()->PutCharacterInCar( player, car );
+                }
+            }
         }
     }
     else 
     {
-        //TODO:  Make a put player on ground type thingie.  I shouldn't have to know about this.
-        GetGameplayManager()->PlaceCharacterAtLocator( player, mPlayerRestart );
-        GetAvatarManager()->PutCharacterOnGround( player, car );
+        if( player != NULL && mPlayerRestart != NULL )
+        {
+            GetGameplayManager()->PlaceCharacterAtLocator( player, mPlayerRestart );
+            if( GetAvatarManager() != NULL )
+            {
+                GetAvatarManager()->PutCharacterOnGround( player, car );
+            }
+        }
     }    
 
-    GetEventManager()->TriggerEvent( EVENT_CHARACTER_POS_RESET );
+    if( GetEventManager() != NULL )
+    {
+        GetEventManager()->TriggerEvent( EVENT_CHARACTER_POS_RESET );
+    }
 
     //Let's cut the camera.
-    GetSuperCamManager()->GetSCC( 0 )->NoTransition();
-    GetSuperCamManager()->GetSCC( 0 )->DoCameraCut();
+    if( GetSuperCamManager() != NULL && GetSuperCamManager()->GetSCC( 0 ) != NULL )
+    {
+        GetSuperCamManager()->GetSCC( 0 )->NoTransition();
+        GetSuperCamManager()->GetSCC( 0 )->DoCameraCut();
+    }
 }
 
 //=============================================================================

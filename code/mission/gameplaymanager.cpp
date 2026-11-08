@@ -642,18 +642,32 @@ void GameplayManager::Update( int elapsedTime )
 void GameplayManager::PlaceCharacterAtLocator( Character* character, 
                                                Locator* locator )
 {
-    rAssert( character != NULL );
-
-    rAssert( locator != NULL );
-
-    rmt::Vector pos;
-    locator->GetLocation( &pos );
-    float rotation = 0.0f;
-    
-    CarStartLocator* csl = dynamic_cast<CarStartLocator*>(locator);
-    if(csl)
+    if( character == NULL )
     {
-        rotation = csl->GetRotation();
+        return;
+    }
+
+    rmt::Vector pos( 0.0f, 0.0f, 0.0f );
+    float rotation = 0.0f;
+
+    if( locator != NULL )
+    {
+        locator->GetLocation( &pos );
+        CarStartLocator* csl = dynamic_cast<CarStartLocator*>(locator);
+        if( csl != NULL )
+        {
+            rotation = csl->GetRotation();
+        }
+    }
+    else
+    {
+        CarStartLocator* anyLoc = p3d::find<CarStartLocator>( "level_carstart" );
+        if( anyLoc == NULL ) anyLoc = p3d::find<CarStartLocator>( "level1_carstart" );
+        if( anyLoc != NULL )
+        {
+            anyLoc->GetLocation( &pos );
+            rotation = anyLoc->GetRotation();
+        }
     }
 
     character->RelocateAndReset( pos, rotation );

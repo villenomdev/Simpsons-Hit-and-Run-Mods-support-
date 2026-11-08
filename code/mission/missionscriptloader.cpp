@@ -1352,10 +1352,26 @@ void MissionScriptLoader::InitMissionPlayerVehicle( int argc, const char** argv 
 //=============================================================================
 void MissionScriptLoader::SetMissionResetPlayerInCar( int argc, const char** argv )
 {
+    if( argc < 2 || argv[ 1 ] == NULL )
+    {
+        return;
+    }
+
     //Find the locator named argv[ 1 ]
     CarStartLocator* loc = p3d::find<CarStartLocator>( argv[ 1 ] );
+    if ( loc == NULL )
+    {
+        if( strcmp( argv[ 1 ], "level_carstart" ) == 0 )
+        {
+            loc = p3d::find<CarStartLocator>( "level1_carstart" );
+        }
+        else if( strcmp( argv[ 1 ], "level1_carstart" ) == 0 )
+        {
+            loc = p3d::find<CarStartLocator>( "level_carstart" );
+        }
+    }
 
-    if ( loc != NULL )
+    if ( loc != NULL && spInstance != NULL && spInstance->mpMission != NULL )
     {
         spInstance->mpMission->SetVehicleRestart( loc );
     }
@@ -1381,36 +1397,49 @@ void MissionScriptLoader::SetMissionResetPlayerInCar( int argc, const char** arg
 //=============================================================================
 void MissionScriptLoader::SetMissionResetPlayerOutCar( int argc, const char** argv )
 {
+    if( argc < 3 || argv[ 1 ] == NULL || argv[ 2 ] == NULL )
+    {
+        return;
+    }
+
     //Find the locator named argv[ 1 ]
     Locator* playerLoc = p3d::find<Locator>( argv[ 1 ] );
+    if( playerLoc == NULL )
+    {
+        if( strcmp( argv[ 1 ], "level_start" ) == 0 )
+        {
+            playerLoc = p3d::find<Locator>( "level1_start" );
+        }
+        else if( strcmp( argv[ 1 ], "level1_start" ) == 0 )
+        {
+            playerLoc = p3d::find<Locator>( "level_start" );
+        }
+    }
+
     //Find the locator named argv[ 2 ]
     CarStartLocator* vehicleLoc = p3d::find<CarStartLocator>( argv[ 2 ] );
-
-    if ( playerLoc != NULL && vehicleLoc != NULL )
+    if( vehicleLoc == NULL )
     {
-        spInstance->mpMission->SetVehicleRestart( vehicleLoc );
-        spInstance->mpMission->SetPlayerRestart( playerLoc );
+        if( strcmp( argv[ 2 ], "level_carstart" ) == 0 )
+        {
+            vehicleLoc = p3d::find<CarStartLocator>( "level1_carstart" );
+        }
+        else if( strcmp( argv[ 2 ], "level1_carstart" ) == 0 )
+        {
+            vehicleLoc = p3d::find<CarStartLocator>( "level_carstart" );
+        }
     }
-    else
-    {
-#ifndef FINAL
-        
-        if(playerLoc == NULL)
-        {
-            char error[256];
-            sprintf( error, "Can not find locator: %s, Designer Error!!!!\n", argv[ 1 ] );
-            TreeOfWoeErrorMsg(error);
-            rTuneAssertMsg(0, error );
-        }
-        if(vehicleLoc == NULL)
-        {
-            char error[256];
-            sprintf( error, "Can not find locator: %s, Designer Error!!!!\n", argv[ 1 ] );
-            TreeOfWoeErrorMsg(error);
-            rTuneAssertMsg(0, error );
-        }
 
-#endif
+    if ( spInstance != NULL && spInstance->mpMission != NULL )
+    {
+        if ( playerLoc != NULL )
+        {
+            spInstance->mpMission->SetPlayerRestart( playerLoc );
+        }
+        if ( vehicleLoc != NULL )
+        {
+            spInstance->mpMission->SetVehicleRestart( vehicleLoc );
+        }
     }
 
     if(playerLoc)
