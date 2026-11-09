@@ -222,8 +222,13 @@ void pglProgram::SetLightState(int handle, const pddiLight* lightState)
 
 void pglProgram::SetAmbientLight(pddiColour ambient)
 {
+#ifdef RAD_CG
     if (acs)
         UniformColour(acs, ambient);
+#else
+    if (acs >= 0)
+        UniformColour(acs, ambient);
+#endif
 }
 
 #ifdef RAD_CG

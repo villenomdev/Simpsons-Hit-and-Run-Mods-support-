@@ -18,20 +18,28 @@ static inline GLenum PickPixelFormat(pddiPixelFormat format)
 {
     switch (format)
     {
-    case PDDI_PIXEL_RGB888: return GL_BGRA_EXT;
-    case PDDI_PIXEL_ARGB8888: return GL_BGRA_EXT;
+    case PDDI_PIXEL_RGB888:
+    case PDDI_PIXEL_ARGB8888:
+        return GL_RGBA;
+    case PDDI_PIXEL_RGB565:
+        return GL_RGB;
+    case PDDI_PIXEL_ARGB1555:
+    case PDDI_PIXEL_ARGB4444:
+        return GL_RGBA;
 #ifdef RAD_VITAGL
     case PDDI_PIXEL_DXT1: return GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
     case PDDI_PIXEL_DXT3: return GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
     case PDDI_PIXEL_DXT5: return GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
 #else
-    case PDDI_PIXEL_DXT1: return GL_RGBA;
-    case PDDI_PIXEL_DXT3: return GL_RGBA;
-    case PDDI_PIXEL_DXT5: return GL_RGBA;
+    case PDDI_PIXEL_DXT1:
+    case PDDI_PIXEL_DXT3:
+    case PDDI_PIXEL_DXT5:
+        return GL_RGBA;
 #endif
+    default:
+        break;
     }
-    PDDIASSERT(false);
-    return GL_INVALID_ENUM;
+    return GL_RGBA;
 };
 
 static inline pddiPixelFormat PickPixelFormat(pddiTextureType type, int bitDepth, int alphaDepth)
@@ -91,11 +99,19 @@ void pglTexture::SetGLState(void)
 
     MICROPROFILE_SCOPEI("PDDI", "pglTexture::SetGLState", MP_RED);
 
+    glActiveTexture(GL_TEXTURE0);
+
     if(!valid)
     {
-        glDeleteTextures(1, &gltexture);
+        if(gltexture)
+            glDeleteTextures(1, &gltexture);
         glGenTextures(1,&gltexture);
         glBindTexture(GL_TEXTURE_2D, gltexture);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 //      if(nMipMap == 0)
         if (type == PDDI_TEXTYPE_DXT1 || type == PDDI_TEXTYPE_DXT3 || type == PDDI_TEXTYPE_DXT5)
@@ -115,7 +131,7 @@ void pglTexture::SetGLState(void)
                 BlockDecompressImageBC2(xSize, ySize, (const uint8_t*)bits[0], image);
             else if( type == PDDI_TEXTYPE_DXT5)
                 BlockDecompressImageBC3(xSize, ySize, (const uint8_t*)bits[0], image);
-            glTexImage2D(GL_TEXTURE_2D, 0, PickPixelFormat(lock.format), xSize,
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, xSize,
                 ySize, 0, GL_RGBA, GL_UNSIGNED_BYTE,
                 image);
             delete [] image;
@@ -130,8 +146,9 @@ void pglTexture::SetGLState(void)
 #endif
         else
         {
-            glTexImage2D(GL_TEXTURE_2D, 0, PickPixelFormat(lock.format), xSize,
-                ySize, 0, lock.native ? GL_BGRA_EXT : GL_RGBA, GL_UNSIGNED_BYTE,
+            GLenum glFormat = lock.native ? GL_BGRA_EXT : GL_RGBA;
+            glTexImage2D(GL_TEXTURE_2D, 0, glFormat, xSize,
+                ySize, 0, glFormat, GL_UNSIGNED_BYTE,
                 (GLvoid *)bits[0]);
         }
         /*

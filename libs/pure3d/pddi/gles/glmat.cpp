@@ -259,6 +259,8 @@ void pglMat::SetDevPass(unsigned pass)
     
     context->SetTextureEnvironment(&texEnv[i]);
 
+    glActiveTexture(GL_TEXTURE0);
+
     if(texEnv[i].texture)
     {
         texEnv[i].texture->SetGLState();

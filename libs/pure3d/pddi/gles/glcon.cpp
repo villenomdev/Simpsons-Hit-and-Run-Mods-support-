@@ -257,6 +257,7 @@ pglContext::pglContext(pglDevice* dev, pglDisplay* disp) : pddiBaseContext((pddi
             "        }\n"
 
         #ifdef RAD_ANDROID
+                "        diff = max(diff, vec3(0.35));\n"
                 "    }\n"
         #endif
 
