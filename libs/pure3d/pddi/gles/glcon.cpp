@@ -809,8 +809,16 @@ pglPrimBuffer::pglPrimBuffer(pglContext* c, pddiPrimType type, unsigned vertexFo
     }
 
     indexCount = nIndex;
+    hasIndices = false;
+    indices = NULL;
     if(indexCount) 
+    {
         indices = new unsigned short[indexCount];
+        for(unsigned int i = 0; i < indexCount; i++)
+        {
+            indices[i] = (unsigned short)i;
+        }
+    }
 
     nStrips = 0;
     strips = NULL;
@@ -873,6 +881,7 @@ void pglPrimBuffer::SetIndices(unsigned short* i, int count)
 {
     PDDIASSERT(count <= (int)indexCount);
     memcpy(indices, i, count * sizeof(unsigned short));
+    hasIndices = true;
     valid = false;
 }
 
@@ -891,7 +900,7 @@ void pglPrimBuffer::Display(void)
         glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
         glBufferData(GL_ARRAY_BUFFER, mem, buffer, GL_STATIC_DRAW);
 
-        if(indexCount && indices)
+        if(indexCount && indices && hasIndices)
         {
             if(!indexBuffer)
                 glGenBuffers(1, &indexBuffer);
@@ -950,13 +959,13 @@ void pglPrimBuffer::Display(void)
         glBindVertexArrayOES(vertexArray);
     }
 
-    if(indexCount && indices)
+    if(indexCount && indices && hasIndices)
     {
         glDrawElements(primTypeTable[primType],indexCount,GL_UNSIGNED_SHORT,0);
     }
     else
     {
-        glDrawArrays(primTypeTable[primType], 0, total);
+        glDrawArrays(primTypeTable[primType], 0, total ? total : allocated);
     }
 }
 

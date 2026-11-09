@@ -176,6 +176,7 @@ protected:
 
     unsigned short* indices;
     unsigned indexCount;
+    bool hasIndices;
 
     bool valid;
     GLuint vertexBuffer;
