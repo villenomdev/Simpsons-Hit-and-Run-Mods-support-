@@ -1121,7 +1121,6 @@ tPrimGroup* tPrimGroupLoader::LoadPCSkin(tChunkFile* f, tEntityStore* store, rmt
 
 
 	bool primBufferInitialized = false;
-	bool hasIndexList = false;
     
     int nUVChannel = mVertexFormat & 0xf;
     int count;    
@@ -1268,7 +1267,6 @@ tPrimGroup* tPrimGroupLoader::LoadPCSkin(tChunkFile* f, tEntityStore* store, rmt
             case Pure3D::Mesh::INDEXLIST:
             {
                 P3DASSERT(primBufferInitialized);
-                hasIndexList = true;
                 int count = f->GetLong();
                 P3DASSERT(count == mIndexCount);
                 unsigned short* tempIndexList = (unsigned short *)p3d::MallocTemp(sizeof(unsigned short) * count);
@@ -1347,17 +1345,6 @@ tPrimGroup* tPrimGroupLoader::LoadPCSkin(tChunkFile* f, tEntityStore* store, rmt
         }
 
         f->EndChunk();
-    }
-
-    if(mIndexCount > 0 && !hasIndexList && primBuffer)
-    {
-        unsigned short* tempIndexList = (unsigned short *)p3d::MallocTemp(sizeof(unsigned short) * mIndexCount);
-        for (unsigned int a = 0; a < mIndexCount; a++)
-        {
-            tempIndexList[a] = (unsigned short)(a < mVertexCount ? a : 0);
-        }
-        primBuffer->SetIndices(tempIndexList, mIndexCount);
-        p3d::FreeTemp(tempIndexList);
     }
 
     return primGroup;
@@ -1630,7 +1617,6 @@ tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Mat
 
     pddiPrimBuffer* primBuffer = NULL;
     bool primBufferInitialized = false;
-    bool hasIndexList = false;
     
     primGroup->SetShader(mShader);
     primGroup->SetPrimType(mPrimType);
@@ -1865,7 +1851,6 @@ tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Mat
             case Pure3D::Mesh::INDEXLIST:
             {
                 P3DASSERT(primBufferInitialized);
-                hasIndexList = true;
                 int count = f->GetLong();
                 P3DASSERT(count == mIndexCount);
                 unsigned short* tempIndexList = (unsigned short *)p3d::MallocTemp(sizeof(unsigned short) * count);
@@ -1996,17 +1981,6 @@ tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Mat
             stream = NULL;
         }
         f->EndChunk();
-    }
-
-    if(mIndexCount > 0 && !hasIndexList && !memoryImaged && primBuffer)
-    {
-        unsigned short* tempIndexList = (unsigned short *)p3d::MallocTemp(sizeof(unsigned short) * mIndexCount);
-        for (unsigned int a = 0; a < mIndexCount; a++)
-        {
-            tempIndexList[a] = (unsigned short)(a < mVertexCount ? a : 0);
-        }
-        primBuffer->SetIndices(tempIndexList, mIndexCount);
-        p3d::FreeTemp(tempIndexList);
     }
 
     //Todo: tmpPositions should be removed when PDDI supports expression system

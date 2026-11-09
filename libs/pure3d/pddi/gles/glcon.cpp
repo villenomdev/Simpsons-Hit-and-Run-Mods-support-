@@ -880,8 +880,16 @@ void pglPrimBuffer::UnlockIndexBuffer(int count)
 void pglPrimBuffer::SetIndices(unsigned short* i, int count)
 {
     PDDIASSERT(count <= (int)indexCount);
-    memcpy(indices, i, count * sizeof(unsigned short));
-    hasIndices = true;
+    if(count > 0 && indices && i)
+    {
+        memcpy(indices, i, count * sizeof(unsigned short));
+        indexCount = count;
+        hasIndices = true;
+    }
+    else
+    {
+        hasIndices = false;
+    }
     valid = false;
 }
 
