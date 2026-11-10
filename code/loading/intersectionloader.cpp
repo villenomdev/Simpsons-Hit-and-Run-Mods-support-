@@ -108,7 +108,6 @@ tLoadStatus IntersectionLoader::Load(tChunkFile* f, tEntityStore* store)
         if( intersection == NULL )
         {
             rTunePrintf( "WARNING: IntersectionLoader: Limit exceeded, skipping '%s'\n", name );
-            MEMTRACK_POP_GROUP( "Intersection Loading" );
             return LOAD_OK;
         }
         rAssert( intersection );
