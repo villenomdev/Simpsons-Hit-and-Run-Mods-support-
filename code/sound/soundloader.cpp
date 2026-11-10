@@ -25,6 +25,7 @@
 
 #include <memory/srrmemory.h>
 #include <loading/loadingmanager.h>
+#include <loading/soundfilehandler.h>
 #include <worldsim/redbrick/vehicle.h>
 #include <constants/vehicleenum.h>
 #include <mission/gameplaymanager.h>
