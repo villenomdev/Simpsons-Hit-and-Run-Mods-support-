@@ -1006,6 +1006,16 @@ bool Win32Platform::OnDriveError( radFileError error, const char* pDriveName, vo
         return gm->OnDriveError( error, pDriveName, pUserData );
     }
 
+#if defined(RAD_ANDROID)
+    // On Android, do not suspend or freeze the engine on file read/open errors.
+    // Return false so radFile marks the request as failed without retrying infinitely.
+    if( error != Success )
+    {
+        rTunePrintf( "Win32Platform::OnDriveError: ignoring file error %d on Android\n", error );
+        return false;
+    }
+#endif
+
     switch ( error )
     {
     case Success:

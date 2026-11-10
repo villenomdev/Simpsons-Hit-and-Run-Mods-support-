@@ -660,6 +660,10 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
     case STATE_WAIT_FOR_DYNALOAD:
         {
             static int s_dynaloadWatchdog = 0;
+            static int s_overallLoadingTimeout = 0;
+
+            s_overallLoadingTimeout++;
+
             if( !GetLoadingManager()->IsLoading() && !GetRenderManager()->IsDynaLoading() )
             {
                 s_dynaloadWatchdog++;
@@ -667,12 +671,22 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
                 {
                     rReleasePrintf("MissionManager: Dynaload wait watchdog timeout (%d ticks), advancing to STATE_MISSION_START\n", s_dynaloadWatchdog);
                     s_dynaloadWatchdog = 0;
+                    s_overallLoadingTimeout = 0;
                     mLoadingState = STATE_MISSION_START;
                 }
             }
             else
             {
                 s_dynaloadWatchdog = 0;
+
+                // Safety timeout: if loading has been stuck for ~300 frames (~5 seconds), force advance
+                if( s_overallLoadingTimeout > 300 )
+                {
+                    rReleasePrintf("MissionManager: Force advancing to STATE_MISSION_START due to hung loading state (overall ticks: %d)\n", s_overallLoadingTimeout);
+                    s_dynaloadWatchdog = 0;
+                    s_overallLoadingTimeout = 0;
+                    mLoadingState = STATE_MISSION_START;
+                }
             }
             break;
         }

@@ -90,6 +90,11 @@ void PathManager::AllocatePaths( int nPaths )
 
 Path* PathManager::GetFreePath()
 {
+    if( mPaths == NULL || mNextFreeIndex < 0 || mNextFreeIndex >= mnPaths )
+    {
+        rTunePrintf( "WARNING: PathManager: MAX_PATHS (%d) exceeded or null paths!\n", mnPaths );
+        return NULL;
+    }
     rAssert( 0 <= mNextFreeIndex && mNextFreeIndex < mnPaths );
     rAssert( mPaths != NULL );
 

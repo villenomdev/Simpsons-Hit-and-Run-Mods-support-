@@ -33,7 +33,7 @@ public:
 public:
     enum
     {
-        MAX_PATHS = 125
+        MAX_PATHS = 250
     };
 
 

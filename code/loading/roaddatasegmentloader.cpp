@@ -102,6 +102,11 @@ tLoadStatus RoadDataSegmentLoader::Load(tChunkFile* f, tEntityStore* store)
     RoadManager* rm = RoadManager::GetInstance();
 
     RoadSegmentData* rsd = rm->GetFreeRoadSegmentDataMemory();
+    if( rsd == NULL )
+    {
+        rTunePrintf( "WARNING: RoadDataSegmentLoader: Limit exceeded, skipping '%s'\n", name );
+        return LOAD_OK;
+    }
     rAssert( rsd );
 
     rsd->SetName( name );

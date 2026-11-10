@@ -51,6 +51,16 @@ tLoadStatus PathLoader::Load(tChunkFile* f, tEntityStore* store)
 
     // Get a free path & set up its segments
     Path* path = pm->GetFreePath();
+    if( path == NULL )
+    {
+        rTunePrintf( "WARNING: PathLoader: Limit exceeded, skipping path\n" );
+        f->GetFloat(); f->GetFloat(); f->GetFloat();
+        for( long int s = 0; s < nSegments; ++s )
+        {
+            f->GetFloat(); f->GetFloat(); f->GetFloat();
+        }
+        return LOAD_OK;
+    }
     rAssert( path != NULL );
 
     path->AllocateSegments( nSegments );

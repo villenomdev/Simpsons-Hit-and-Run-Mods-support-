@@ -194,11 +194,11 @@ void RoadManager::Init( bool shutdown )
 
     if( !shutdown )
     {
-        InitializeRoadSegmentDataMemory( 1200 );
-        //TODO: base this on incoming chunk data.
-        InitializeRoadMemory( 150 );
-        InitializeIntersectionMemory( 60 );
-        InitializeRoadSegmentMemory( 1200 );
+        InitializeRoadSegmentDataMemory( 2400 );
+        // Increased limits for mod maps / Downtown terrain in Level 1 (e.g. Some Law Enforcement)
+        InitializeRoadMemory( 300 );
+        InitializeIntersectionMemory( 120 );
+        InitializeRoadSegmentMemory( 2400 );
     }
 }
 void RoadManager::InitializeRoadMemory( unsigned int numRoads )

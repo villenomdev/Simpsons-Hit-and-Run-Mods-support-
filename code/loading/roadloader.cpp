@@ -164,6 +164,12 @@ MEMTRACK_POP_GROUP( "Road Loading" );
     }
 
     Road* road = rm->GetFreeRoadMemory();
+    if( road == NULL )
+    {
+        rTunePrintf( "WARNING: RoadLoader: Road limit exceeded, skipping road '%s'\n", name );
+        MEMTRACK_POP_GROUP( "Road Loading" );
+        return LOAD_OK;
+    }
     rAssert( road );
     
 #ifndef RAD_RELEASE

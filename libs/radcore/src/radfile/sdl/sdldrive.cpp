@@ -39,6 +39,7 @@
 #ifdef RAD_ANDROID
 #include <android/log.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <string.h>     // strerror()
 #include <sys/stat.h>   // stat()
@@ -1303,6 +1304,23 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
             LOGI("[Drive] Fallback game file: '%s' -> '%s'", fileName, fallbackSpec);
             strncpy( fullName, fallbackSpec, radFileFilenameMax );
             fullName[ radFileFilenameMax ] = '\0';
+        }
+        else if( ( fileName && strstr( fileName, "empty.spt" ) != NULL ) || strstr( fullName, "empty.spt" ) != NULL )
+        {
+            const char* dummyPath = "/data/local/tmp/shar_empty.spt";
+            int fd = open( dummyPath, O_CREAT | O_RDWR, 0666 );
+            if( fd < 0 )
+            {
+                dummyPath = "/tmp/shar_empty.spt";
+                fd = open( dummyPath, O_CREAT | O_RDWR, 0666 );
+            }
+            if( fd >= 0 )
+            {
+                close( fd );
+                LOGI("[Drive] Generated dummy empty script for '%s' -> '%s'", fileName, dummyPath);
+                strncpy( fullName, dummyPath, radFileFilenameMax );
+                fullName[ radFileFilenameMax ] = '\0';
+            }
         }
     }
 #endif

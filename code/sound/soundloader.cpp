@@ -490,7 +490,11 @@ bool SoundLoader::LoadClusterByName( const char* clusterName, SoundFileHandler* 
     //
     // If we get here, cluster not found
     //
-    rAssert( false );
+    rTunePrintf( "WARNING: SoundLoader: cluster '%s' not found!\n", clusterName );
+    if( callbackObj != NULL )
+    {
+        callbackObj->LoadCompleted();
+    }
     return( false );
 }
 
