@@ -174,7 +174,7 @@ namespace
                 fprintf( fp, "================================================================================\n" );
                 fprintf( fp, "The Simpsons: Hit & Run - Diagnostic Game Log\n" );
                 fprintf( fp, "Target file:     %s\n", filePath.c_str() );
-                fprintf( fp, "App Version:     v0.93.24 (versionCode 117)\n" );
+                fprintf( fp, "App Version:     v0.93.25 (versionCode 118)\n" );
                 fprintf( fp, "Architecture:    %s\n", abi );
                 fprintf( fp, "Session started: %s\n", startStr );
                 fprintf( fp, "Active Mod:      %s\n", s_activeModName );
@@ -278,7 +278,7 @@ void GameLog::Initialize()
 
     char initMsg[ 256 ];
     snprintf( initMsg, sizeof( initMsg ),
-              "[%s] [INFO  ] [GameLog   ] Initialized diagnostic execution log (v0.93.24)", timeStr );
+              "[%s] [INFO  ] [GameLog   ] Initialized diagnostic execution log (v0.93.25)", timeStr );
     s_entries.push_back( initMsg );
 
     s_initialized = true;

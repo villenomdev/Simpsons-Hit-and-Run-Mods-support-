@@ -103,6 +103,7 @@ static void LogPathStatus(const char* label, const char* path)
 static bool s_ModsEnabled = true;
 static char s_ModsDirectory[512] = "/storage/emulated/0/Simpsons Hit and Run/mods";
 static char s_ActiveMod[256] = "";
+static char s_MainGameDir[512] = "";
 static char s_FallbackGameDir[512] = "";
 static std::vector<std::string> s_DiscoveredModFoldersPrimary;
 static std::vector<std::string> s_DiscoveredModFoldersFallback;
@@ -558,6 +559,157 @@ static bool CheckModCandidate( const char* basePath, const char* subPath, const 
     return false;
 }
 
+static bool IsScriptOrTextFile( const char* filename )
+{
+    if( filename == NULL ) return false;
+    const char* dot = strrchr( filename, '.' );
+    if( !dot ) return false;
+    return ( strcasecmp( dot, ".mfk" ) == 0 ||
+             strcasecmp( dot, ".con" ) == 0 ||
+             strcasecmp( dot, ".spt" ) == 0 ||
+             strcasecmp( dot, ".ini" ) == 0 ||
+             strcasecmp( dot, ".txt" ) == 0 ||
+             strcasecmp( dot, ".cfg" ) == 0 ||
+             strcasecmp( dot, ".dat" ) == 0 );
+}
+
+static bool MergeAndServeAdditionalFile( const char* effDir,
+                                         const char* cname,
+                                         const char* additionalFilePath,
+                                         char* outPath,
+                                         size_t outSize )
+{
+    char basePath[1024];
+    basePath[0] = '\0';
+
+    if( s_MainGameDir[0] != '\0' )
+    {
+        char candidate[1024];
+        snprintf( candidate, sizeof(candidate), "%s/%s", s_MainGameDir, cname );
+        struct stat st;
+        if( stat( candidate, &st ) == 0 && !S_ISDIR( st.st_mode ) )
+        {
+            strncpy( basePath, candidate, sizeof(basePath) - 1 );
+            basePath[sizeof(basePath) - 1] = '\0';
+        }
+    }
+
+    if( basePath[0] == '\0' && s_FallbackGameDir[0] != '\0' )
+    {
+        char candidate[1024];
+        snprintf( candidate, sizeof(candidate), "%s/%s", s_FallbackGameDir, cname );
+        struct stat st;
+        if( stat( candidate, &st ) == 0 && !S_ISDIR( st.st_mode ) )
+        {
+            strncpy( basePath, candidate, sizeof(basePath) - 1 );
+            basePath[sizeof(basePath) - 1] = '\0';
+        }
+    }
+
+    // Also check standard public folder
+    if( basePath[0] == '\0' )
+    {
+        const char* pub = "/storage/emulated/0/Simpsons Hit and Run/files";
+        char candidate[1024];
+        snprintf( candidate, sizeof(candidate), "%s/%s", pub, cname );
+        struct stat st;
+        if( stat( candidate, &st ) == 0 && !S_ISDIR( st.st_mode ) )
+        {
+            strncpy( basePath, candidate, sizeof(basePath) - 1 );
+            basePath[sizeof(basePath) - 1] = '\0';
+        }
+    }
+
+    // If base game file does NOT exist, AdditionalFiles provides the file directly!
+    if( basePath[0] == '\0' )
+    {
+        strncpy( outPath, additionalFilePath, outSize - 1 );
+        outPath[ outSize - 1 ] = '\0';
+        return true;
+    }
+
+    // If not a text/script file (e.g. .p3d), do not merge bytes:
+    if( !IsScriptOrTextFile( cname ) )
+    {
+        strncpy( outPath, additionalFilePath, outSize - 1 );
+        outPath[ outSize - 1 ] = '\0';
+        return true;
+    }
+
+    // Both base file and additional file exist, and it's a script/text file.
+    // Merge them into <effDir>/_merged/<cname>
+    char mergedPath[1024];
+    snprintf( mergedPath, sizeof(mergedPath), "%s/_merged/%s", effDir, cname );
+
+    struct stat baseSt, addSt, mergedSt;
+    bool needsMerge = true;
+    if( stat( basePath, &baseSt ) == 0 &&
+        stat( additionalFilePath, &addSt ) == 0 &&
+        stat( mergedPath, &mergedSt ) == 0 )
+    {
+        if( mergedSt.st_mtime >= baseSt.st_mtime && mergedSt.st_mtime >= addSt.st_mtime )
+        {
+            needsMerge = false;
+        }
+    }
+
+    if( needsMerge )
+    {
+        std::string parentDir = mergedPath;
+        size_t lastSlash = parentDir.rfind( '/' );
+        if( lastSlash != std::string::npos )
+        {
+            parentDir = parentDir.substr( 0, lastSlash );
+            char tmp[1024];
+            snprintf( tmp, sizeof(tmp), "%s", parentDir.c_str() );
+            for( char* p = tmp + 1; *p; p++ )
+            {
+                if( *p == '/' )
+                {
+                    *p = '\0';
+                    mkdir( tmp, 0777 );
+                    *p = '/';
+                }
+            }
+            mkdir( tmp, 0777 );
+        }
+
+        FILE* fBase = fopen( basePath, "rb" );
+        FILE* fAdd = fopen( additionalFilePath, "rb" );
+        FILE* fOut = fopen( mergedPath, "wb" );
+
+        if( fBase && fAdd && fOut )
+        {
+            char buf[8192];
+            size_t rd;
+            while( ( rd = fread( buf, 1, sizeof(buf), fBase ) ) > 0 )
+            {
+                fwrite( buf, 1, rd, fOut );
+            }
+            const char* separator = "\n\n// --- AdditionalFiles ---\n";
+            fwrite( separator, 1, strlen(separator), fOut );
+            while( ( rd = fread( buf, 1, sizeof(buf), fAdd ) ) > 0 )
+            {
+                fwrite( buf, 1, rd, fOut );
+            }
+            LOGI( "[Mods] Merged base game script '%s' with AdditionalFiles '%s' -> '%s'",
+                  basePath, additionalFilePath, mergedPath );
+        }
+        else
+        {
+            LOGE( "[Mods] Failed to merge '%s' and '%s' to '%s'", basePath, additionalFilePath, mergedPath );
+        }
+
+        if( fBase ) fclose( fBase );
+        if( fAdd ) fclose( fAdd );
+        if( fOut ) fclose( fOut );
+    }
+
+    strncpy( outPath, mergedPath, outSize - 1 );
+    outPath[ outSize - 1 ] = '\0';
+    return true;
+}
+
 static bool SearchModInDirectory( const char* modsDir,
                                   std::vector<std::string>& discoveredFolders,
                                   bool& scannedFlag,
@@ -586,9 +738,10 @@ static bool SearchModInDirectory( const char* modsDir,
             {
                 return true;
             }
-            if( CheckModCandidate( effDir, "AdditionalFiles", cname, outPath, outSize ) )
+            char addCand[1024];
+            if( CheckModCandidate( effDir, "AdditionalFiles", cname, addCand, sizeof(addCand) ) )
             {
-                return true;
+                return MergeAndServeAdditionalFile( effDir, cname, addCand, outPath, outSize );
             }
             if( CheckModCandidate( effDir, NULL, cname, outPath, outSize ) )
             {
@@ -607,9 +760,12 @@ static bool SearchModInDirectory( const char* modsDir,
         // 1b. Check <mods_dir>/<active_mod>/AdditionalFiles/<file>
         char addSub[512];
         snprintf( addSub, sizeof(addSub), "%s/AdditionalFiles", s_ActiveMod );
-        if( CheckModCandidate( modsDir, addSub, cname, outPath, outSize ) )
+        char addCand[1024];
+        if( CheckModCandidate( modsDir, addSub, cname, addCand, sizeof(addCand) ) )
         {
-            return true;
+            char modDir[1024];
+            snprintf( modDir, sizeof(modDir), "%s/%s", modsDir, s_ActiveMod );
+            return MergeAndServeAdditionalFile( modDir, cname, addCand, outPath, outSize );
         }
 
         // 1c. Check <mods_dir>/<active_mod>/<file>
@@ -630,9 +786,10 @@ static bool SearchModInDirectory( const char* modsDir,
     }
 
     // 3. Check root of mods_directory with AdditionalFiles
-    if( CheckModCandidate( modsDir, "AdditionalFiles", cname, outPath, outSize ) )
+    char rootAddCand[1024];
+    if( CheckModCandidate( modsDir, "AdditionalFiles", cname, rootAddCand, sizeof(rootAddCand) ) )
     {
-        return true;
+        return MergeAndServeAdditionalFile( modsDir, cname, rootAddCand, outPath, outSize );
     }
 
     // 4. Check root of mods_directory directly
@@ -1208,6 +1365,13 @@ radSdlDrive::radSdlDrive(const char* pdrivespec, radMemoryAllocator alloc)
     }
 
 #if defined(RAD_ANDROID)
+    strncpy( s_MainGameDir, m_DrivePath, sizeof(s_MainGameDir) - 1 );
+    s_MainGameDir[ sizeof(s_MainGameDir) - 1 ] = '\0';
+    size_t mgLen = strlen(s_MainGameDir);
+    if( mgLen > 0 && s_MainGameDir[mgLen - 1] == '/' ) {
+        s_MainGameDir[mgLen - 1] = '\0';
+    }
+
     size_t fLen = strlen(s_FallbackGameDir);
     if (fLen > 0 && s_FallbackGameDir[fLen - 1] != '/' && fLen < sizeof(s_FallbackGameDir)) {
         strncat(s_FallbackGameDir, "/", sizeof(s_FallbackGameDir) - fLen - 1);

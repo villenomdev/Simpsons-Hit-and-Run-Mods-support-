@@ -184,6 +184,24 @@ static bool ExtractLSPAInternal( const char* archivePath, const char* targetDir,
 
         bool ExtractNode( const std::string& parentPath )
         {
+            if( isTimestamped )
+            {
+                // In timestamped format, advance curBlock until we find a Name Block (byte 0 == 2)
+                unsigned char testB[1];
+                while( (long)(curBlock * 512) < totalLength )
+                {
+                    if( fseek( fileHandle, curBlock * 512, SEEK_SET ) != 0 || fread( testB, 1, 1, fileHandle ) != 1 )
+                    {
+                        return false;
+                    }
+                    if( testB[0] == 2 )
+                    {
+                        break;
+                    }
+                    curBlock++;
+                }
+            }
+
             // Read name block
             unsigned char nameBlock[512];
             if( fseek( fileHandle, curBlock * 512, SEEK_SET ) != 0 || fread( nameBlock, 1, 512, fileHandle ) != 512 )
@@ -240,7 +258,10 @@ static bool ExtractLSPAInternal( const char* archivePath, const char* targetDir,
             else
             {
                 // File
-                curBlock++; // Skip extra block for files
+                if( !isTimestamped )
+                {
+                    curBlock++; // In non-timestamped format, files have an extra block
+                }
                 uint32_t fileSize = val;
                 EnsureDirectoryRecursive( GetParentDir( outDiskPath ) );
 

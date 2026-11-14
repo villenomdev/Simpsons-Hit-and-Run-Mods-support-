@@ -1202,7 +1202,10 @@ void MissionScriptLoader::CloseMission( int argc, const char** argv )
 //=============================================================================
 void MissionScriptLoader::SetForcedCar( int argc, const char** argv )
 {
-    spInstance->mpMission->SetForcedCar( true );
+    if ( spInstance != NULL && spInstance->mpMission != NULL )
+    {
+        spInstance->mpMission->SetForcedCar( true );
+    }
 }
 
 //=============================================================================
@@ -2116,7 +2119,10 @@ void MissionScriptLoader::AddCollectibleStateProp( int argc, const char** argv )
     const char* statepropName = argv[1];
     const char* locatorName = argv[2];
     int physID = atoi( argv[3] );
-    spInstance->mpMission->CreateStatePropCollectible( statepropName, locatorName, physID );
+    if ( spInstance != NULL && spInstance->mpMission != NULL )
+    {
+        spInstance->mpMission->CreateStatePropCollectible( statepropName, locatorName, physID );
+    }
 }
 
 
@@ -2820,8 +2826,11 @@ void MissionScriptLoader::SetStageCamera( int argc, const char** argv )
 //=============================================================================
 void MissionScriptLoader::ResetToThisStage( int argc, const char** argv )
 {
-    int stagNum = spInstance->spInstance->mpMission->GetNumStages() - 1;
-    spInstance->mpMission->SetResetToStage( stagNum );
+    if ( spInstance != NULL && spInstance->mpMission != NULL )
+    {
+        int stagNum = spInstance->mpMission->GetNumStages() - 1;
+        spInstance->mpMission->SetResetToStage( stagNum );
+    }
 }
 
 //=============================================================================
@@ -3738,10 +3747,17 @@ void MissionScriptLoader::AddStage( int argc, const char** argv )
             }
         }
 
-        int index = spInstance->mpMission->GetNumStages();
+        if ( spInstance->mpMission != NULL )
+        {
+            int index = spInstance->mpMission->GetNumStages();
 
-        spInstance->mpMission->SetNumStages( index + 1 );
-        spInstance->mpMission->SetStage( index, spInstance->mpStage );
+            spInstance->mpMission->SetNumStages( index + 1 );
+            spInstance->mpMission->SetStage( index, spInstance->mpStage );
+        }
+        else
+        {
+            rReleasePrintf("ERROR: AddStage called but spInstance->mpMission is NULL!\n");
+        }
 
         spInstance->mpObjective = NULL;
         spInstance->mpCondition = NULL;
@@ -3777,10 +3793,13 @@ void MissionScriptLoader::AddStage( int argc, const char** argv )
                     if ( spInstance->mpStage == NULL )
                     {
                         spInstance->mpStage = new MissionStage();
-                        int index = spInstance->mpMission->GetNumStages();
+                        if ( spInstance->mpMission != NULL )
+                        {
+                            int index = spInstance->mpMission->GetNumStages();
 
-                        spInstance->mpMission->SetNumStages( index + 1 );
-                        spInstance->mpMission->SetStage( index, spInstance->mpStage );
+                            spInstance->mpMission->SetNumStages( index + 1 );
+                            spInstance->mpMission->SetStage( index, spInstance->mpStage );
+                        }
 
                         spInstance->mpObjective = NULL;
                         spInstance->mpCondition = NULL;
@@ -4902,7 +4921,10 @@ void MissionScriptLoader::UsePedGroup( int argc, const char** argv )
     rTuneAssertMsg( 0 <= groupId && groupId < PedestrianManager::MAX_MODEL_GROUPS, 
         "Invalid groupId" );
 
-    spInstance->mpMission->SetInitPedGroup( groupId );
+    if ( spInstance != NULL && spInstance->mpMission != NULL )
+    {
+        spInstance->mpMission->SetInitPedGroup( groupId );
+    }
 }
 
 void MissionScriptLoader::BindReward (int argc, const char** argv)
@@ -5270,7 +5292,10 @@ void MissionScriptLoader::GoToPattyAndSelmaScreenWhenDone( int argc, const char*
 //=============================================================================
 void MissionScriptLoader::StreetRacePropsLoad( int argc, const char** argv )
 {
-     spInstance->mpMission->LoadStreetRaceProps( argv[ 1 ] );
+    if ( spInstance != NULL && spInstance->mpMission != NULL )
+    {
+        spInstance->mpMission->LoadStreetRaceProps( argv[ 1 ] );
+    }
 }
 
 
@@ -5286,14 +5311,20 @@ void MissionScriptLoader::StreetRacePropsLoad( int argc, const char** argv )
 //=============================================================================
 void MissionScriptLoader::StreetRacePropsUnload( int argc, const char** argv )
 {
-     spInstance->mpMission->UnloadStreetRaceProps( argv[ 1 ] );
+    if ( spInstance != NULL && spInstance->mpMission != NULL )
+    {
+        spInstance->mpMission->UnloadStreetRaceProps( argv[ 1 ] );
+    }
 }
 
 
 void MissionScriptLoader::UseElapsedTime(int argc, const char** argv)
 {
     rTuneAssertMsg( spInstance->mpStage != NULL, "This Command: UseElapsedTime needs to be in a stage \n" );
-    spInstance->mpStage->UseElapsedTime();
+    if ( spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->UseElapsedTime();
+    }
 }
 
     
@@ -5306,8 +5337,10 @@ void MissionScriptLoader::AttachStatePropCollectible(int argc, const char** argv
     const char* vehicleName = argv[1];
     const char* statepropName = argv[2];
 
-    rAssert( spInstance != NULL );
-    spInstance->mpMission->AttachStatePropCollectible( statepropName, vehicleName, 2 );
+    if ( spInstance != NULL && spInstance->mpMission != NULL )
+    {
+        spInstance->mpMission->AttachStatePropCollectible( statepropName, vehicleName, 2 );
+    }
 
     HeapMgr()->PopHeap( GMA_LEVEL_MISSION );
 }
@@ -5316,14 +5349,18 @@ void MissionScriptLoader::ShowHUD(int argc, const char** argv)
 {
     bool isShowHUD = ( strcmp( argv[ 1 ], "false" ) != 0 );
 
-    rAssert( spInstance != NULL && spInstance->mpMission != NULL );
-    spInstance->mpMission->ShowHUD( isShowHUD );
+    if ( spInstance != NULL && spInstance->mpMission != NULL )
+    {
+        spInstance->mpMission->ShowHUD( isShowHUD );
+    }
 }
 
 void MissionScriptLoader::SetNumValidFailureHints( int argc, const char** argv )
 {
-    rAssert( spInstance != NULL && spInstance->mpMission != NULL );
-    spInstance->mpMission->SetNumValidFailureHints( atoi( argv[ 1 ] ) );
+    if ( spInstance != NULL && spInstance->mpMission != NULL )
+    {
+        spInstance->mpMission->SetNumValidFailureHints( atoi( argv[ 1 ] ) );
+    }
 }
 
 //used to set the ParTime for Gamble Missions ONLY!!!!
