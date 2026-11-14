@@ -1,6 +1,7 @@
 #include <data/config/androidconfigurationmanager.h>
 #include <input/touch/touchcameracontroller.h>
 #include <debug/gamelog.h>
+#include <mod_manager.hpp>
 #include <stdio.h>
 #include <string.h>
 
@@ -11,6 +12,17 @@
     #include <unistd.h>
 
 extern void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod, bool safeFrontend = false );
+
+static void OnModPersistence( const char* modName )
+{
+    GetAndroidConfigurationManager()->SetActiveMod( modName );
+    GetAndroidConfigurationManager()->Save();
+}
+
+static void OnModLog( const char* category, const char* message )
+{
+    GameLog_Recordf( category, "%s", message );
+}
 #else
 void radSdlDriveSetModsConfig( bool, const char*, const char*, bool = false ) {}
 #endif
@@ -105,6 +117,10 @@ void AndroidConfigurationManager::Initialize()
 
     // Update radSdlDrive with mods settings
     radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod, m_safeFrontend );
+
+    // Register ModManager callbacks for persistence and logging
+    ModManager::GetInstance().SetPersistenceCallback( OnModPersistence );
+    ModManager::GetInstance().SetLogCallback( OnModLog );
 
     // Sync GameLog enabled state with saved configuration
     GameLog::SetEnabled( m_enableGamelog );

@@ -17,10 +17,17 @@ struct ModEntry
     bool isActive;             // true if currently active
 };
 
+typedef void (*ModPersistenceCallback)( const char* modName );
+typedef void (*ModLogCallback)( const char* category, const char* message );
+
 class ModManager
 {
 public:
     static ModManager& GetInstance();
+
+    void SetPersistenceCallback( ModPersistenceCallback cb ) { m_persistenceCallback = cb; }
+    void SetLogCallback( ModLogCallback cb ) { m_logCallback = cb; }
+    void NotifyLog( const char* category, const char* fmt, ... );
 
     // Scan mods directory (/storage/emulated/0/Simpsons Hit and Run/mods/)
     // Discovers subdirectories, .lmlm files, and .zip files.
@@ -64,6 +71,8 @@ private:
     char m_effectiveModDir[1024];
     char m_baseModsDir[512];
     bool m_scanned;
+    ModPersistenceCallback m_persistenceCallback;
+    ModLogCallback m_logCallback;
 };
 
 #endif // MOD_MANAGER_HPP

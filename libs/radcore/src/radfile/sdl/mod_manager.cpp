@@ -1,14 +1,13 @@
 #include "mod_manager.hpp"
 #include "mod_archive.hpp"
 #include "modloader_lua.hpp"
-#include <data/config/androidconfigurationmanager.h>
 #include <radfile.hpp>
-#include <debug/gamelog.h>
 
 extern void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod, bool safeFrontend );
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -33,7 +32,9 @@ ModManager& ModManager::GetInstance()
 
 ModManager::ModManager()
 :   m_activeModIndex( 0 ),
-    m_scanned( false )
+    m_scanned( false ),
+    m_persistenceCallback( NULL ),
+    m_logCallback( NULL )
 {
     m_activeModName[ 0 ] = '\0';
     m_effectiveModDir[ 0 ] = '\0';
@@ -43,6 +44,21 @@ ModManager::ModManager()
 
 ModManager::~ModManager()
 {
+}
+
+void ModManager::NotifyLog( const char* category, const char* fmt, ... )
+{
+    char buf[512];
+    va_list args;
+    va_start( args, fmt );
+    vsnprintf( buf, sizeof(buf), fmt, args );
+    va_end( args );
+
+    LOGI( "[%s] %s", category, buf );
+    if( m_logCallback != NULL )
+    {
+        m_logCallback( category, buf );
+    }
 }
 
 void ModManager::ParseMetaIniInfo( const std::string& folderOrArchive, ModEntry& entry )
@@ -214,14 +230,15 @@ bool ModManager::SetActiveMod( const char* modName )
             m_mods[i].isActive = ( i == 0 );
         }
 
-        GetAndroidConfigurationManager()->SetActiveMod( "" );
-        GetAndroidConfigurationManager()->Save();
+        if( m_persistenceCallback != NULL )
+        {
+            m_persistenceCallback( "" );
+        }
 
         ModLoaderLua::GetInstance().Reset();
         radSdlDriveSetModsConfig( true, m_baseModsDir, "", false );
 
-        GameLog_Recordf( "Mods", "Deactivated all mods (Vanilla mode active)" );
-        LOGI( "[ModManager] Deactivated all mods. Vanilla mode active." );
+        NotifyLog( "Mods", "Deactivated all mods (Vanilla mode active)" );
         return true;
     }
 
@@ -264,11 +281,11 @@ bool ModManager::SetActiveMod( const char* modName )
         if( !ModArchive::IsExtractionUpToDate( selected.fullPath.c_str(), cacheDir ) )
         {
             LOGI( "[ModManager] Unpacking mod archive '%s' to '%s'...\n", selected.fullPath.c_str(), cacheDir );
-            GameLog_Recordf( "Mods", "Unpacking mod archive '%s' to cache...", selected.name.c_str() );
+            NotifyLog( "Mods", "Unpacking mod archive '%s' to cache...", selected.name.c_str() );
             if( !ModArchive::ExtractArchive( selected.fullPath.c_str(), cacheDir ) )
             {
                 LOGE( "[ModManager] Failed to extract archive '%s'!\n", selected.fullPath.c_str() );
-                GameLog_Recordf( "Mods", "ERROR: Failed to extract mod archive '%s'", selected.name.c_str() );
+                NotifyLog( "Mods", "ERROR: Failed to extract mod archive '%s'", selected.name.c_str() );
                 return false;
             }
         }
@@ -284,8 +301,10 @@ bool ModManager::SetActiveMod( const char* modName )
     }
 
     // Persist to configuration
-    GetAndroidConfigurationManager()->SetActiveMod( m_activeModName );
-    GetAndroidConfigurationManager()->Save();
+    if( m_persistenceCallback != NULL )
+    {
+        m_persistenceCallback( m_activeModName );
+    }
 
     // Reinitialize Lucas Mod Loader environment
     ModLoaderLua::GetInstance().Reset();
@@ -294,8 +313,7 @@ bool ModManager::SetActiveMod( const char* modName )
     // Update SDL file drive redirection
     radSdlDriveSetModsConfig( true, m_baseModsDir, m_activeModName, false );
 
-    GameLog_Recordf( "Mods", "Active mod set to: '%s' (effective dir: '%s')", m_activeModName, m_effectiveModDir );
-    LOGI( "[ModManager] Active mod successfully switched to '%s' (%s)", m_activeModName, m_effectiveModDir );
+    NotifyLog( "Mods", "Active mod set to: '%s' (effective dir: '%s')", m_activeModName, m_effectiveModDir );
     return true;
 }
 
