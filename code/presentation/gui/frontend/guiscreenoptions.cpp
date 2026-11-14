@@ -27,7 +27,7 @@
 #include <cheats/cheats.h>
 #include <debug/gamelog.h>
 #include <data/config/androidconfigurationmanager.h>
-#include "mod_manager.hpp"
+#include <mod_manager.hpp>
 #include <events/eventmanager.h>
 #include <memory/srrmemory.h>
 

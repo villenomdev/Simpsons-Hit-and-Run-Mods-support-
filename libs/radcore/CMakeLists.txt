@@ -86,6 +86,7 @@ endif()
 add_library(radcore STATIC ${RADCORE_SOURCES})
 target_include_directories(radcore
 	PUBLIC "inc/"
+	PUBLIC "src/radfile/sdl/"
 	PRIVATE "src/pch/" # TODO
 	PUBLIC "${CMAKE_SOURCE_DIR}/code/" # wtf (radobject.hpp includes memory/classsizetracker.h)
 	PUBLIC "${CMAKE_SOURCE_DIR}/libs/lua/"
