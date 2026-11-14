@@ -29,6 +29,7 @@
 #include <gameflow/gameflow.h>
 
 #include <loading/loadingmanager.h>
+#include <debug/gamelog.h>
 
 #include <meta/carstartlocator.h>
 #include <meta/eventlocator.h>
@@ -471,6 +472,23 @@ void MissionManager::HandleEvent( EventEnum id, void* pEventData )
     GameplayManager::HandleEvent(id, pEventData);
 }
 
+static const char* GetLoadingStateName( MissionManager::LoadingStateEnum state )
+{
+    switch( state )
+    {
+        case MissionManager::STATE_INVALID: return "STATE_INVALID";
+        case MissionManager::STATE_LEVEL: return "STATE_LEVEL";
+        case MissionManager::STATE_MISSION_LOAD: return "STATE_MISSION_LOAD";
+        case MissionManager::STATE_MISSION_LOADING: return "STATE_MISSION_LOADING";
+        case MissionManager::STATE_MISSION_INIT: return "STATE_MISSION_INIT";
+        case MissionManager::STATE_MISSION_INITING: return "STATE_MISSION_INITING";
+        case MissionManager::STATE_MISSION_DYNALOAD: return "STATE_MISSION_DYNALOAD";
+        case MissionManager::STATE_WAIT_FOR_DYNALOAD: return "STATE_WAIT_FOR_DYNALOAD";
+        case MissionManager::STATE_MISSION_START: return "STATE_MISSION_START";
+        default: return "STATE_UNKNOWN";
+    }
+}
+
 //=============================================================================
 // MissionManager::PerformLoading
 //=============================================================================
@@ -484,26 +502,74 @@ void MissionManager::HandleEvent( EventEnum id, void* pEventData )
 void MissionManager::PerformLoading()
 {
 MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );  
+
+    static LoadingStateEnum s_lastLoggedLoadingState = STATE_INVALID;
+    if( mLoadingState != s_lastLoggedLoadingState )
+    {
+        GameLog_Recordf("MissionManager", "LoadingState transition: %s -> %s",
+                        GetLoadingStateName(s_lastLoggedLoadingState),
+                        GetLoadingStateName(mLoadingState));
+        s_lastLoggedLoadingState = mLoadingState;
+    }
+
     switch( mLoadingState )
     {
     case STATE_LEVEL:
     case STATE_MISSION_LOADING:
         {
+            static int s_missionLoadingWatchdog = 0;
+
             if( GetLoadingManager()->IsLoading() || GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
             {
+                s_missionLoadingWatchdog++;
+                if( s_missionLoadingWatchdog > 300 )
+                {
+                    rReleasePrintf("[WARN ] [MissionManager] STATE_MISSION_LOADING timeout (%d ticks). IsLoading=%d, VehicleUnderConstruction=%p. Force advancing to STATE_MISSION_INIT.\n",
+                                   s_missionLoadingWatchdog,
+                                   (int)GetLoadingManager()->IsLoading(),
+                                   GetVehicleCentral()->GetCurrentVehicleUnderConstruction());
+                    GameLog_Recordf("MissionManager", "STATE_MISSION_LOADING timeout (%d ticks), force advancing to STATE_MISSION_INIT. IsLoading=%d",
+                                    s_missionLoadingWatchdog, (int)GetLoadingManager()->IsLoading());
+                    s_missionLoadingWatchdog = 0;
+                    if( GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
+                    {
+                        GetVehicleCentral()->OnProcessRequestsComplete( NULL );
+                    }
+                    mLoadingState = STATE_MISSION_INIT;
+                }
                 break;
             }
 
+            s_missionLoadingWatchdog = 0;
             mLoadingState = STATE_MISSION_INIT;
             break;
         }
     case STATE_MISSION_INITING:
         {
+            static int s_missionInitingWatchdog = 0;
+
             if( GetLoadingManager()->IsLoading() || GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL)
             {
+                s_missionInitingWatchdog++;
+                if( s_missionInitingWatchdog > 300 )
+                {
+                    rReleasePrintf("[WARN ] [MissionManager] STATE_MISSION_INITING timeout (%d ticks). IsLoading=%d, VehicleUnderConstruction=%p. Force advancing to STATE_MISSION_DYNALOAD.\n",
+                                   s_missionInitingWatchdog,
+                                   (int)GetLoadingManager()->IsLoading(),
+                                   GetVehicleCentral()->GetCurrentVehicleUnderConstruction());
+                    GameLog_Recordf("MissionManager", "STATE_MISSION_INITING timeout (%d ticks), force advancing to STATE_MISSION_DYNALOAD. IsLoading=%d",
+                                    s_missionInitingWatchdog, (int)GetLoadingManager()->IsLoading());
+                    s_missionInitingWatchdog = 0;
+                    if( GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
+                    {
+                        GetVehicleCentral()->OnProcessRequestsComplete( NULL );
+                    }
+                    mLoadingState = STATE_MISSION_DYNALOAD;
+                }
                 break;
             }
 
+            s_missionInitingWatchdog = 0;
             mLoadingState = STATE_MISSION_DYNALOAD;           
             break;
         }
@@ -670,6 +736,7 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
                 if( s_dynaloadWatchdog > 15 )
                 {
                     rReleasePrintf("MissionManager: Dynaload wait watchdog timeout (%d ticks), advancing to STATE_MISSION_START\n", s_dynaloadWatchdog);
+                    GameLog_Recordf("MissionManager", "Dynaload wait watchdog timeout (%d ticks), advancing to STATE_MISSION_START", s_dynaloadWatchdog);
                     s_dynaloadWatchdog = 0;
                     s_overallLoadingTimeout = 0;
                     mLoadingState = STATE_MISSION_START;
@@ -683,6 +750,7 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
                 if( s_overallLoadingTimeout > 300 )
                 {
                     rReleasePrintf("MissionManager: Force advancing to STATE_MISSION_START due to hung loading state (overall ticks: %d)\n", s_overallLoadingTimeout);
+                    GameLog_Recordf("MissionManager", "Force advancing to STATE_MISSION_START due to hung loading state (ticks: %d)", s_overallLoadingTimeout);
                     s_dynaloadWatchdog = 0;
                     s_overallLoadingTimeout = 0;
                     mLoadingState = STATE_MISSION_START;

@@ -63,6 +63,7 @@ class LoadingGameplayContext : public LoadingContext
         static LoadingGameplayContext* spInstance;
         
         bool mUnQueuedLoadRequests;
+        unsigned int m_loadingElapsedTicks;
 };
 
 // A little syntactic sugar for getting at this singleton.

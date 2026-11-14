@@ -28,6 +28,8 @@
 #include <worldsim/parkedcars/parkedcarmanager.h>
 #include <worldsim/traffic/trafficmanager.h>
 #include <sound/soundmanager.h>
+#include <gameflow/gameflow.h>
+#include <debug/gamelog.h>
 
 //******************************************************************************
 //
@@ -80,6 +82,8 @@ LoadingGameplayContext* LoadingGameplayContext::GetInstance()
 //
 //==============================================================================
 LoadingGameplayContext::LoadingGameplayContext()
+:
+m_loadingElapsedTicks( 0 )
 {
 }
 
@@ -115,6 +119,7 @@ LoadingGameplayContext::~LoadingGameplayContext()
 //=============================================================================
 void LoadingGameplayContext::OnStart( ContextEnum previousContext )
 {
+    m_loadingElapsedTicks = 0;
     GetGameplayManager()->mIsDemo = false;
 
     // Common to all loading contexts.
@@ -169,6 +174,26 @@ void LoadingGameplayContext::OnStop( ContextEnum nextContext )
 //=============================================================================
 void LoadingGameplayContext::OnUpdate( unsigned int elapsedTime )
 {
+    m_loadingElapsedTicks++;
+    if( m_loadingElapsedTicks > 300 )
+    {
+        if( (m_loadingElapsedTicks % 150) == 0 )
+        {
+            GameLog_Recordf("LoadingGameplayContext", "Loading context active for %u ticks. State=%d, LM::IsLoading=%d",
+                            m_loadingElapsedTicks,
+                            (int)GetGameplayManager()->GetLoadingState(),
+                            (int)GetLoadingManager()->IsLoading());
+        }
+        if( m_loadingElapsedTicks > 900 )
+        {
+            if( GetGameFlow()->GetNextContext() != CONTEXT_GAMEPLAY && GetGameFlow()->GetCurrentContext() != CONTEXT_GAMEPLAY )
+            {
+                GameLog_Recordf("LoadingGameplayContext", "Failsafe: forced transition to CONTEXT_GAMEPLAY after %u ticks", m_loadingElapsedTicks);
+                GetGameFlow()->SetContext( CONTEXT_GAMEPLAY );
+            }
+        }
+    }
+
     GetGameplayManager()->Update( elapsedTime );
 
     // Common to all loading contexts.

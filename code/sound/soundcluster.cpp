@@ -100,6 +100,7 @@ void SoundCluster::LoadSounds( SoundFileHandler* callbackObj /* = NULL  */ )
 {
     IDaSoundResource* resource;
     int i;
+    int capturedCount = 0;
     
     MEMTRACK_PUSH_GROUP( "Sound" );
 
@@ -115,7 +116,10 @@ void SoundCluster::LoadSounds( SoundFileHandler* callbackObj /* = NULL  */ )
             if( resource != NULL )
             {
                 if( !resource->GetStreaming() )
+                {
                     resource->CaptureResource();
+                    capturedCount++;
+                }
             }
 #ifdef RAD_DEBUG
             else
@@ -129,12 +133,23 @@ void SoundCluster::LoadSounds( SoundFileHandler* callbackObj /* = NULL  */ )
         }
     }
 
-    //
-    // Register for notification on load completion
-    //
-    Sound::daSoundRenderingManagerGet()->GetDynaLoadManager()->AddCompletionCallback( this, NULL );
+    if( capturedCount == 0 && Sound::daSoundRenderingManagerGet()->GetDynaLoadManager()->GetNumPendingSwaps() == 0 )
+    {
+        m_isLoaded = true;
+        if( callbackObj != NULL )
+        {
+            callbackObj->LoadCompleted();
+        }
+    }
+    else
+    {
+        //
+        // Register for notification on load completion
+        //
+        Sound::daSoundRenderingManagerGet()->GetDynaLoadManager()->AddCompletionCallback( this, NULL );
 
-    m_loadCompleteCallbackObj = callbackObj;
+        m_loadCompleteCallbackObj = callbackObj;
+    }
 
     //
     // Tell the resource manager that we're using this namespace

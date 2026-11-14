@@ -925,8 +925,12 @@ void daSoundDynaLoadManager::AddCompletionCallback
         rDebugString( "pending using current sounddynamic loading manager.\n" );
         rAssert( 0 );
 
-        m_pCompletionCallback->Release( );
+        IDaSoundDynaLoadCompletionCallback* prevCallback = m_pCompletionCallback;
+        void* prevUserData = m_pCompletionUserData;
         m_pCompletionCallback = NULL;
+        m_pCompletionUserData = NULL;
+        prevCallback->OnDynaLoadOperationsComplete( prevUserData );
+        prevCallback->Release( );
     }
 
     m_pCompletionCallback = pCallback;

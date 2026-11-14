@@ -33,6 +33,7 @@
 #include <cheats/cheatinputsystem.h>
 
 #include <mission/gameplaymanager.h>
+#include <debug/gamelog.h>
 
 //******************************************************************************
 //
@@ -302,6 +303,11 @@ void LoadingManager::OnLoadFileComplete( void* pUserData )
                     request.filename,
                     radTimeGetMilliseconds() - request.startTime );
     }
+
+    GameLog_Recordf("LoadingManager", "Async load DONE: '%s' (%u ms, remaining queue: %d)",
+                    request.filename,
+                    radTimeGetMilliseconds() - request.startTime,
+                    (mRequestTail - mRequestHead + MAX_REQUESTS) % MAX_REQUESTS);
     
     // Continue onto the next request.
     mRequestHead = (mRequestHead + 1) % MAX_REQUESTS;
@@ -611,6 +617,8 @@ void LoadingManager::ProcessNextRequest()
                 {            
                     rReleasePrintf( "<<START>> Async Loading: %s\n", request.filename );
                 }
+                GameLog_Recordf("LoadingManager", "Async load START: '%s' (head=%u, tail=%u)",
+                                request.filename, mRequestHead, mRequestTail);
 #ifdef RAD_WIN32
                 mRequestsProcessed++;
 #endif
