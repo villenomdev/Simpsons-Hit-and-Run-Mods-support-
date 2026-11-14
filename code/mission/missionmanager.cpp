@@ -518,11 +518,22 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
     case STATE_MISSION_LOADING:
         {
             static int s_missionLoadingWatchdog = 0;
+            static int s_lastRequestsRemaining = -1;
 
             if( GetLoadingManager()->IsLoading() || GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
             {
-                s_missionLoadingWatchdog++;
-                if( s_missionLoadingWatchdog > 300 )
+                int curReq = GetLoadingManager()->GetNumCurrentRequests();
+                if( curReq != s_lastRequestsRemaining )
+                {
+                    s_lastRequestsRemaining = curReq;
+                    s_missionLoadingWatchdog = 0;
+                }
+                else
+                {
+                    s_missionLoadingWatchdog++;
+                }
+
+                if( s_missionLoadingWatchdog > 1800 )
                 {
                     rReleasePrintf("[WARN ] [MissionManager] STATE_MISSION_LOADING timeout (%d ticks). IsLoading=%d, VehicleUnderConstruction=%p. Force advancing to STATE_MISSION_INIT.\n",
                                    s_missionLoadingWatchdog,
@@ -541,17 +552,29 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
             }
 
             s_missionLoadingWatchdog = 0;
+            s_lastRequestsRemaining = -1;
             mLoadingState = STATE_MISSION_INIT;
             break;
         }
     case STATE_MISSION_INITING:
         {
             static int s_missionInitingWatchdog = 0;
+            static int s_lastInitingRequestsRemaining = -1;
 
-            if( GetLoadingManager()->IsLoading() || GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL)
+            if( GetLoadingManager()->IsLoading() || GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
             {
-                s_missionInitingWatchdog++;
-                if( s_missionInitingWatchdog > 300 )
+                int curReq = GetLoadingManager()->GetNumCurrentRequests();
+                if( curReq != s_lastInitingRequestsRemaining )
+                {
+                    s_lastInitingRequestsRemaining = curReq;
+                    s_missionInitingWatchdog = 0;
+                }
+                else
+                {
+                    s_missionInitingWatchdog++;
+                }
+
+                if( s_missionInitingWatchdog > 1800 )
                 {
                     rReleasePrintf("[WARN ] [MissionManager] STATE_MISSION_INITING timeout (%d ticks). IsLoading=%d, VehicleUnderConstruction=%p. Force advancing to STATE_MISSION_DYNALOAD.\n",
                                    s_missionInitingWatchdog,
@@ -570,6 +593,7 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
             }
 
             s_missionInitingWatchdog = 0;
+            s_lastInitingRequestsRemaining = -1;
             mLoadingState = STATE_MISSION_DYNALOAD;           
             break;
         }
@@ -639,10 +663,13 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
             if ( mShouldLoadDefaultVehicle )
             {
                 AddLevelVehicle( mDefaultLevelVehicleName, eDefaultCar, mDefaultLevelVehicleConfile );
-                PlaceVehicleAtLocatorName( GetVehicleInSlot( eDefaultCar ), mDefaultLevelVehicleLocator );
-                SetCurrentVehicle( GetVehicleInSlot( eDefaultCar ) );
-
-                mShouldLoadDefaultVehicle = false;
+                Vehicle* defaultVehicle = GetVehicleInSlot( eDefaultCar );
+                if ( defaultVehicle != NULL )
+                {
+                    PlaceVehicleAtLocatorName( defaultVehicle, mDefaultLevelVehicleLocator );
+                    SetCurrentVehicle( defaultVehicle );
+                    mShouldLoadDefaultVehicle = false;
+                }
             }
 
             char filename[128];

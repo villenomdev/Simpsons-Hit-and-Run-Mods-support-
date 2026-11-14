@@ -26,6 +26,8 @@
 #include <cheats/cheatinputsystem.h>
 #include <cheats/cheats.h>
 #include <debug/gamelog.h>
+#include <data/config/androidconfigurationmanager.h>
+#include "mod_manager.hpp"
 #include <events/eventmanager.h>
 #include <memory/srrmemory.h>
 
@@ -77,7 +79,10 @@ CGuiScreenOptions::CGuiScreenOptions
     m_cheatsPage( NULL ),
     m_cheatsOverlay( NULL ),
     m_startingCheatID( 0 ),
-    m_elapsedProgressiveModeTestTime( -1 )
+    m_elapsedProgressiveModeTestTime( -1 ),
+    m_inModsMenu( false ),
+    m_modsMenuSelection( 0 ),
+    m_modsMenuTopIndex( 0 )
 {
 MEMTRACK_PUSH_GROUP( "CGUIScreenOptions" );
     // Retrieve the Scrooby drawing elements.
@@ -103,13 +108,7 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenOptions" );
     m_pMenu->AddMenuItem( pGroup->GetText( "ViewMovies" ) );
     m_pMenu->AddMenuItem( pGroup->GetText( "ViewCredits" ) );
 
-#ifndef RAD_PC
-    Scrooby::Text* display = pGroup->GetText( "Display" );
-    if( display != NULL )
-    {
-        display->SetVisible( false );
-    }
-#endif
+
 
     // Setup Gamelog menu item, placed directly below View Credits
     Scrooby::Text* gamelogText = pGroup->GetText( "DisplayMode" );
@@ -170,15 +169,59 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenOptions" );
 
     m_pMenu->AddMenuItem( gamelogText );
 
+    // Setup Mods menu item, placed directly below Gamelog
+    Scrooby::Text* modsText = pGroup->GetText( "Display" );
+    if( modsText != NULL )
+    {
+        Scrooby::Text* creditsText = pGroup->GetText( "ViewCredits" );
+        Scrooby::Text* moviesText = pGroup->GetText( "ViewMovies" );
+        if( creditsText != NULL )
+        {
+            int cWidth = 0, cHeight = 0;
+            creditsText->GetBoundingBoxSize( cWidth, cHeight );
+            int cCenterX = 0, cCenterY = 0;
+            creditsText->GetBoundingBoxCenter( cCenterX, cCenterY );
+
+            int spacingY = -38;
+            if( moviesText != NULL )
+            {
+                int mCenterX = 0, mCenterY = 0;
+                moviesText->GetBoundingBoxCenter( mCenterX, mCenterY );
+                int diff = cCenterY - mCenterY;
+                if( diff < -15 && diff > -75 )
+                {
+                    spacingY = diff;
+                }
+            }
+
+            int targetWidth = ( cWidth > 320 ) ? cWidth : 320;
+            int targetHeight = ( cHeight > 32 ) ? cHeight : 32;
+
+            modsText->SetBoundingBoxSize( targetWidth, targetHeight );
+            modsText->SetHorizontalJustification( creditsText->GetHorizontalJustification() );
+            modsText->SetVerticalJustification( creditsText->GetVerticalJustification() );
+            modsText->SetPositionOfCenter( cCenterX, cCenterY + 2 * spacingY );
+            modsText->SetColour( creditsText->GetColour() );
+            modsText->SetAlpha( 1.0f );
+        }
+
+        char modsStr[64];
+        ModManager::GetInstance().GetOptionsDisplayString( modsStr, sizeof(modsStr) );
+        modsText->SetString( 0, modsStr );
+        modsText->SetVisible( true );
+    }
+
+    m_pMenu->AddMenuItem( modsText );
+
 #ifdef RAD_DEMO
     m_pMenu->SetMenuItemEnabled( MENU_ITEM_VIEW_MOVIES, false );
     m_pMenu->SetMenuItemEnabled( MENU_ITEM_VIEW_CREDITS, false );
 #endif
 
 #ifndef RAD_PC
-    // Center the 5 visible menu items (Controller, Sound, ViewMovies, ViewCredits, Gamelog)
+    // Center the 6 visible menu items (Controller, Sound, ViewMovies, ViewCredits, Gamelog, Mods)
     pGroup->ResetTransformation();
-    pGroup->Translate( 0, 18 );
+    pGroup->Translate( 0, 36 );
 #endif
 
     // get cheats page, if included
@@ -343,6 +386,61 @@ void CGuiScreenOptions::HandleMessage
 
     if( m_state == GUI_WINDOW_STATE_RUNNING )
     {
+        if( m_inModsMenu )
+        {
+            switch( message )
+            {
+                case GUI_MSG_CONTROLLER_UP:
+                {
+                    int count = ModManager::GetInstance().GetModCount();
+                    if( count > 0 )
+                    {
+                        m_modsMenuSelection--;
+                        if( m_modsMenuSelection < 0 )
+                        {
+                            m_modsMenuSelection = count - 1;
+                        }
+                        this->UpdateModsMenuDisplay();
+                        GetEventManager()->TriggerEvent( EVENT_FE_MENU_UP );
+                    }
+                    return;
+                }
+                case GUI_MSG_CONTROLLER_DOWN:
+                {
+                    int count = ModManager::GetInstance().GetModCount();
+                    if( count > 0 )
+                    {
+                        m_modsMenuSelection++;
+                        if( m_modsMenuSelection >= count )
+                        {
+                            m_modsMenuSelection = 0;
+                        }
+                        this->UpdateModsMenuDisplay();
+                        GetEventManager()->TriggerEvent( EVENT_FE_MENU_DOWN );
+                    }
+                    return;
+                }
+                case GUI_MSG_MENU_SELECTION_MADE:
+                {
+                    ModManager::GetInstance().SetActiveMod( m_modsMenuSelection );
+                    this->UpdateModsMenuDisplay();
+                    GetEventManager()->TriggerEvent( EVENT_FE_MENU_SELECT );
+                    return;
+                }
+                case GUI_MSG_CONTROLLER_BACK:
+                {
+                    this->ExitModsMenu();
+                    GetEventManager()->TriggerEvent( EVENT_FE_MENU_BACK );
+                    return;
+                }
+                default:
+                {
+                    break;
+                }
+            }
+            return;
+        }
+
         switch( message )
         {
             case GUI_MSG_MENU_SELECTION_CHANGED:
@@ -354,11 +452,23 @@ void CGuiScreenOptions::HandleMessage
             case GUI_MSG_CONTROLLER_LEFT:
             case GUI_MSG_CONTROLLER_RIGHT:
             {
-                if( m_pMenu != NULL && m_pMenu->GetSelection() == MENU_ITEM_GAMELOG )
+                if( m_pMenu != NULL )
                 {
-                    GameLog::Toggle();
-                    this->UpdateGamelogDisplay();
-                    GetEventManager()->TriggerEvent( EVENT_FE_MENU_SELECT );
+                    if( m_pMenu->GetSelection() == MENU_ITEM_GAMELOG )
+                    {
+                        GameLog::Toggle();
+                        GetAndroidConfigurationManager()->SetGamelogEnabled( GameLog::IsEnabled() );
+                        GetAndroidConfigurationManager()->Save();
+                        this->UpdateGamelogDisplay();
+                        GetEventManager()->TriggerEvent( EVENT_FE_MENU_SELECT );
+                    }
+                    else if( m_pMenu->GetSelection() == MENU_ITEM_MODS )
+                    {
+                        int dir = ( message == GUI_MSG_CONTROLLER_RIGHT ) ? 1 : -1;
+                        ModManager::GetInstance().CycleMod( dir );
+                        this->UpdateModsDisplay();
+                        GetEventManager()->TriggerEvent( EVENT_FE_MENU_SELECT );
+                    }
                 }
 
                 break;
@@ -408,7 +518,16 @@ void CGuiScreenOptions::HandleMessage
                     case MENU_ITEM_GAMELOG:
                     {
                         GameLog::Toggle();
+                        GetAndroidConfigurationManager()->SetGamelogEnabled( GameLog::IsEnabled() );
+                        GetAndroidConfigurationManager()->Save();
                         this->UpdateGamelogDisplay();
+                        GetEventManager()->TriggerEvent( EVENT_FE_MENU_SELECT );
+
+                        break;
+                    }
+                    case MENU_ITEM_MODS:
+                    {
+                        this->EnterModsMenu();
                         GetEventManager()->TriggerEvent( EVENT_FE_MENU_SELECT );
 
                         break;
@@ -508,6 +627,7 @@ void CGuiScreenOptions::InitIntro()
     rAssert( m_pMenu != NULL );
     this->SetButtonVisible( BUTTON_ICON_ACCEPT, true );
     this->UpdateGamelogDisplay();
+    this->UpdateModsDisplay();
 }
 
 
@@ -525,6 +645,8 @@ void CGuiScreenOptions::InitIntro()
 //===========================================================================
 void CGuiScreenOptions::InitRunning()
 {
+    this->UpdateGamelogDisplay();
+    this->UpdateModsDisplay();
 }
 
 
@@ -542,6 +664,11 @@ void CGuiScreenOptions::InitRunning()
 //===========================================================================
 void CGuiScreenOptions::InitOutro()
 {
+    if( m_inModsMenu )
+    {
+        this->ExitModsMenu();
+    }
+
 #ifndef RAD_E3
     GetCheatInputSystem()->SetEnabled( false );
 #endif
@@ -600,6 +727,166 @@ CGuiScreenOptions::UpdateGamelogDisplay()
                 gamelogText->SetVisible( true );
             }
         }
+    }
+}
+
+void
+CGuiScreenOptions::UpdateModsDisplay()
+{
+    Scrooby::Page* pPage = m_pScroobyScreen->GetPage( "Options" );
+    if( pPage != NULL )
+    {
+        Scrooby::Group* pGroup = pPage->GetGroup( "Menu" );
+        if( pGroup != NULL )
+        {
+            Scrooby::Text* modsText = pGroup->GetText( "Display" );
+            Scrooby::Text* creditsText = pGroup->GetText( "ViewCredits" );
+            Scrooby::Text* moviesText = pGroup->GetText( "ViewMovies" );
+            if( modsText != NULL && creditsText != NULL )
+            {
+                int cWidth = 0, cHeight = 0;
+                creditsText->GetBoundingBoxSize( cWidth, cHeight );
+                int cCenterX = 0, cCenterY = 0;
+                creditsText->GetBoundingBoxCenter( cCenterX, cCenterY );
+
+                int spacingY = -38;
+                if( moviesText != NULL )
+                {
+                    int mCenterX = 0, mCenterY = 0;
+                    moviesText->GetBoundingBoxCenter( mCenterX, mCenterY );
+                    int diff = cCenterY - mCenterY;
+                    if( diff < -15 && diff > -75 )
+                    {
+                        spacingY = diff;
+                    }
+                }
+
+                int targetWidth = ( cWidth > 320 ) ? cWidth : 320;
+                int targetHeight = ( cHeight > 32 ) ? cHeight : 32;
+
+                modsText->SetBoundingBoxSize( targetWidth, targetHeight );
+                modsText->SetHorizontalJustification( creditsText->GetHorizontalJustification() );
+                modsText->SetVerticalJustification( creditsText->GetVerticalJustification() );
+                modsText->SetPositionOfCenter( cCenterX, cCenterY + 2 * spacingY );
+                modsText->SetColour( creditsText->GetColour() );
+                modsText->SetAlpha( 1.0f );
+
+                char modsStr[64];
+                ModManager::GetInstance().GetOptionsDisplayString( modsStr, sizeof(modsStr) );
+                modsText->SetString( 0, modsStr );
+                modsText->SetVisible( true );
+            }
+        }
+    }
+}
+
+void
+CGuiScreenOptions::EnterModsMenu()
+{
+    ModManager::GetInstance().RescanMods();
+    int activeIdx = ModManager::GetInstance().GetActiveModIndex();
+    m_modsMenuSelection = ( activeIdx >= 0 ) ? activeIdx : 0;
+    m_modsMenuTopIndex = 0;
+
+    if( m_cheatsOverlay != NULL && m_cheatsPage != NULL )
+    {
+        m_inModsMenu = true;
+        m_cheatsOverlay->SetVisible( true );
+        this->UpdateModsMenuDisplay();
+    }
+    else
+    {
+        // Fallback: cycle mod directly
+        ModManager::GetInstance().CycleMod( 1 );
+        this->UpdateModsDisplay();
+    }
+}
+
+void
+CGuiScreenOptions::ExitModsMenu()
+{
+    m_inModsMenu = false;
+    if( m_cheatsOverlay != NULL )
+    {
+        m_cheatsOverlay->SetVisible( false );
+    }
+    this->UpdateModsDisplay();
+}
+
+void
+CGuiScreenOptions::UpdateModsMenuDisplay()
+{
+    if( m_cheatsPage == NULL )
+    {
+        return;
+    }
+
+    int modCount = ModManager::GetInstance().GetModCount();
+    int activeIdx = ModManager::GetInstance().GetActiveModIndex();
+
+    const int MAX_DISPLAYED_MODS = 14;
+    if( m_modsMenuSelection < m_modsMenuTopIndex )
+    {
+        m_modsMenuTopIndex = m_modsMenuSelection;
+    }
+    else if( m_modsMenuSelection >= m_modsMenuTopIndex + MAX_DISPLAYED_MODS )
+    {
+        m_modsMenuTopIndex = m_modsMenuSelection - MAX_DISPLAYED_MODS + 1;
+    }
+
+    Scrooby::Text* headerText = m_cheatsPage->GetText( "Cheat0" );
+    if( headerText != NULL )
+    {
+        headerText->SetColour( tColour( 255, 200, 50 ) );
+        headerText->SetString( 0, "=== SELECT ACTIVE MOD (1 ACTIVE ONLY) ===" );
+    }
+
+    for( int i = 0; i < MAX_DISPLAYED_MODS; i++ )
+    {
+        char name[32];
+        sprintf( name, "Cheat%d", i + 1 );
+        Scrooby::Text* pText = m_cheatsPage->GetText( name );
+        if( pText == NULL )
+        {
+            continue;
+        }
+
+        int modIndex = m_modsMenuTopIndex + i;
+        if( modIndex < modCount )
+        {
+            const ModEntry* mod = ModManager::GetInstance().GetMod( modIndex );
+            char lineBuf[128];
+            const char* marker = ( modIndex == activeIdx ) ? "[X]" : "[ ]";
+            const char* cursor = ( modIndex == m_modsMenuSelection ) ? "> " : "  ";
+
+            const char* title = ( mod != NULL ) ? mod->displayName.c_str() : "Unknown";
+            snprintf( lineBuf, sizeof(lineBuf), "%s%s %s", cursor, marker, title );
+
+            pText->SetString( 0, lineBuf );
+            if( modIndex == m_modsMenuSelection )
+            {
+                pText->SetColour( tColour( 255, 255, 0 ) );
+            }
+            else if( modIndex == activeIdx )
+            {
+                pText->SetColour( tColour( 100, 255, 100 ) );
+            }
+            else
+            {
+                pText->SetColour( tColour( 200, 200, 200 ) );
+            }
+        }
+        else
+        {
+            pText->SetString( 0, " " );
+        }
+    }
+
+    Scrooby::Text* footerText = m_cheatsPage->GetText( "Cheat15" );
+    if( footerText != NULL )
+    {
+        footerText->SetColour( tColour( 180, 180, 180 ) );
+        footerText->SetString( 0, "[SELECT] Activate   [BACK] Exit Menu" );
     }
 }
 

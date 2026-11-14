@@ -16,6 +16,7 @@ public:
     bool IsPhoneVibrationEnabled() const;
     bool IsModsEnabled() const;
     bool IsSafeFrontendEnabled() const;
+    bool IsGamelogEnabled() const;
     const char* GetModsPath() const;
     const char* GetActiveMod() const;
 
@@ -24,6 +25,7 @@ public:
     void SetPhoneVibrationEnabled( bool enabled );
     void SetModsEnabled( bool enabled );
     void SetSafeFrontendEnabled( bool enabled );
+    void SetGamelogEnabled( bool enabled );
     void SetModsPath( const char* path );
     void SetActiveMod( const char* modName );
 
@@ -54,6 +56,7 @@ private:
     bool m_phoneVibration;
     bool m_enableMods;
     bool m_safeFrontend;
+    bool m_enableGamelog;
     bool m_dirty;
 
     char m_modsPath[ 512 ];

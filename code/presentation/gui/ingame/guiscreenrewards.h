@@ -105,7 +105,7 @@ protected:
     void SetVehicleStatsVisible( bool isVisible );
     void UpdateVehicleStats();
 
-    static const int MAX_NUM_PREVIEW_VEHICLES = 64;
+    static const int MAX_NUM_PREVIEW_VEHICLES = 256;
     static const int MAX_NUM_PREVIEW_CLOTHING = 4;
 
     CGuiMenu* m_pRewardsMenu;

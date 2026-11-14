@@ -857,11 +857,13 @@ CGuiScreenPhoneBooth::InitMenu()
             if( pReward != NULL &&
                 pReward->GetRewardType() == Reward::ALT_PLAYERCAR )
             {
-                rAssert( m_numPreviewVehicles < MAX_NUM_PREVIEW_VEHICLES - 1 );
-                m_numPreviewVehicles = this->InsertPreviewObject( m_previewVehicles,
-                                                                  m_numPreviewVehicles,
-                                                                  pReward,
-                                                                  true );
+                if( m_numPreviewVehicles < MAX_NUM_PREVIEW_VEHICLES - 1 )
+                {
+                    m_numPreviewVehicles = this->InsertPreviewObject( m_previewVehicles,
+                                                                      m_numPreviewVehicles,
+                                                                      pReward,
+                                                                      true );
+                }
             }
         }
 
@@ -869,22 +871,26 @@ CGuiScreenPhoneBooth::InitMenu()
              pReward != NULL;
              pReward = GetRewardsManager()->FindNextMerchandise( i, Merchandise::SELLER_SIMPSON ) )
         {
-            rAssert( m_numPreviewVehicles < MAX_NUM_PREVIEW_VEHICLES - 1 );
-            m_numPreviewVehicles = this->InsertPreviewObject( m_previewVehicles,
-                                                              m_numPreviewVehicles,
-                                                              pReward,
-                                                              true );
+            if( m_numPreviewVehicles < MAX_NUM_PREVIEW_VEHICLES - 1 )
+            {
+                m_numPreviewVehicles = this->InsertPreviewObject( m_previewVehicles,
+                                                                  m_numPreviewVehicles,
+                                                                  pReward,
+                                                                  true );
+            }
         }
 
         for( pReward = GetRewardsManager()->FindFirstMerchandise( i, Merchandise::SELLER_GIL );
              pReward != NULL;
              pReward = GetRewardsManager()->FindNextMerchandise( i, Merchandise::SELLER_GIL ) )
         {
-            rAssert( m_numPreviewVehicles < MAX_NUM_PREVIEW_VEHICLES - 1 );
-            m_numPreviewVehicles = this->InsertPreviewObject( m_previewVehicles,
-                                                              m_numPreviewVehicles,
-                                                              pReward,
-                                                              true );
+            if( m_numPreviewVehicles < MAX_NUM_PREVIEW_VEHICLES - 1 )
+            {
+                m_numPreviewVehicles = this->InsertPreviewObject( m_previewVehicles,
+                                                                  m_numPreviewVehicles,
+                                                                  pReward,
+                                                                  true );
+            }
         }
     }
 

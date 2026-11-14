@@ -1,5 +1,6 @@
 #include <data/config/androidconfigurationmanager.h>
 #include <input/touch/touchcameracontroller.h>
+#include <debug/gamelog.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -66,6 +67,7 @@ void AndroidConfigurationManager::SetDefaults()
     m_phoneVibration = false;
     m_enableMods = true;
     m_safeFrontend = false;
+    m_enableGamelog = true;
     strncpy( m_modsPath, "/storage/emulated/0/Simpsons Hit and Run/mods", sizeof( m_modsPath ) );
     m_modsPath[ sizeof( m_modsPath ) - 1 ] = '\0';
     m_activeMod[ 0 ] = '\0';
@@ -103,6 +105,9 @@ void AndroidConfigurationManager::Initialize()
 
     // Update radSdlDrive with mods settings
     radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod, m_safeFrontend );
+
+    // Sync GameLog enabled state with saved configuration
+    GameLog::SetEnabled( m_enableGamelog );
 
     //
     // If the file does not exist, or the version is old/missing,
@@ -212,6 +217,11 @@ bool AndroidConfigurationManager::IsSafeFrontendEnabled() const
     return m_safeFrontend;
 }
 
+bool AndroidConfigurationManager::IsGamelogEnabled() const
+{
+    return m_enableGamelog;
+}
+
 const char* AndroidConfigurationManager::GetModsPath() const
 {
     return m_modsPath;
@@ -242,6 +252,17 @@ void AndroidConfigurationManager::SetSafeFrontendEnabled( bool enabled )
     m_safeFrontend = enabled;
     m_dirty = true;
     radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod, m_safeFrontend );
+}
+
+void AndroidConfigurationManager::SetGamelogEnabled( bool enabled )
+{
+    if( m_enableGamelog == enabled )
+    {
+        return;
+    }
+    m_enableGamelog = enabled;
+    m_dirty = true;
+    GameLog::SetEnabled( enabled );
 }
 
 void AndroidConfigurationManager::SetModsPath( const char* path )
@@ -433,6 +454,12 @@ void AndroidConfigurationManager::WriteConfigurationFile()
     fprintf( file, "mods_directory=%s\n", m_modsPath );
     fprintf( file, "# active_mod: Name of active mod folder (leave empty for auto-discovery)\n" );
     fprintf( file, "active_mod=%s\n", m_activeMod );
+    fprintf( file, "\n" );
+    fprintf( file, "# ------------------------------------------------------------\n" );
+    fprintf( file, "# Diagnostic & Logging Settings\n" );
+    fprintf( file, "# ------------------------------------------------------------\n" );
+    fprintf( file, "# enable_gamelog: true/false (generate diagnostic gamelog.txt on storage)\n" );
+    fprintf( file, "enable_gamelog=%s\n", m_enableGamelog ? "true" : "false" );
 
     fclose( file );
 }
@@ -559,6 +586,10 @@ void AndroidConfigurationManager::ParseLine( const char* line )
     {
         strncpy( m_activeMod, value, sizeof( m_activeMod ) - 1 );
         m_activeMod[ sizeof( m_activeMod ) - 1 ] = '\0';
+    }
+    else if( strcmp( key, "enable_gamelog" ) == 0 || strcmp( key, "gamelog" ) == 0 )
+    {
+        m_enableGamelog = this->ParseBool( value, m_enableGamelog );
     }
 }
 

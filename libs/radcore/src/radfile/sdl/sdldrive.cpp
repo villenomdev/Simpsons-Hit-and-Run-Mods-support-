@@ -51,6 +51,8 @@
 #include <fstream>
 #include <algorithm>
 #include "modloader_lua.hpp"
+#include "mod_archive.hpp"
+#include "mod_manager.hpp"
 #endif
 
 
@@ -379,15 +381,16 @@ static void EnsureModIniLoaded()
         s_PrimaryModFoldersScanned = true;
     }
 
-    if( (s_ActiveMod[0] == '\0' || strcmp(s_ActiveMod, "none") == 0) && !s_DiscoveredModFoldersPrimary.empty() )
+    ModManager::GetInstance().InitializeOnBoot( s_ModsDirectory, s_ActiveMod );
+    if( ModManager::GetInstance().HasActiveMod() )
     {
-        strncpy( s_ActiveMod, s_DiscoveredModFoldersPrimary[0].c_str(), sizeof(s_ActiveMod) - 1 );
+        strncpy( s_ActiveMod, ModManager::GetInstance().GetActiveModName(), sizeof(s_ActiveMod) - 1 );
         s_ActiveMod[ sizeof(s_ActiveMod) - 1 ] = '\0';
-    }
-
-    if( s_ActiveMod[0] != '\0' && strcmp( s_ActiveMod, "none" ) != 0 )
-    {
-        ModLoaderLua::GetInstance().Initialize( s_ModsDirectory, s_ActiveMod, s_FallbackGameDir );
+        const char* effDir = ModManager::GetInstance().GetEffectiveActiveModDir();
+        if( effDir && effDir[0] != '\0' )
+        {
+            ScanModFolderForIni( effDir, NULL );
+        }
         ScanModFolderForIni( s_ModsDirectory, s_ActiveMod );
     }
 
@@ -520,7 +523,9 @@ void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* ac
     ModLoaderLua::GetInstance().Reset();
     if( s_ModsEnabled && s_ActiveMod[0] != '\0' && strcmp( s_ActiveMod, "none" ) != 0 )
     {
-        ModLoaderLua::GetInstance().Initialize( s_ModsDirectory, s_ActiveMod, s_FallbackGameDir );
+        const char* effDir = ModManager::GetInstance().GetEffectiveActiveModDir();
+        const char* dirToUse = ( effDir && effDir[0] != '\0' ) ? effDir : s_ModsDirectory;
+        ModLoaderLua::GetInstance().Initialize( dirToUse, s_ActiveMod, s_FallbackGameDir );
     }
     LOGI("[Mods] Config updated: enabled=%d, dir='%s', active_mod='%s', safe_frontend=%d",
          s_ModsEnabled ? 1 : 0, s_ModsDirectory, s_ActiveMod, s_SafeFrontend ? 1 : 0);
@@ -631,9 +636,26 @@ static bool SearchModInDirectory( const char* modsDir,
         return false;
     }
 
-    // 1. If an active mod is configured, check inside that mod folder
+    // 1. If an active mod is configured, check inside that mod folder or cached extracted folder
     if( s_ActiveMod[0] != '\0' && strcmp( s_ActiveMod, "none" ) != 0 )
     {
+        const char* effDir = ModManager::GetInstance().GetEffectiveActiveModDir();
+        if( effDir != NULL && effDir[0] != '\0' )
+        {
+            if( CheckModCandidate( effDir, "CustomFiles", cname, outPath, outSize ) )
+            {
+                return true;
+            }
+            if( CheckModCandidate( effDir, "AdditionalFiles", cname, outPath, outSize ) )
+            {
+                return true;
+            }
+            if( CheckModCandidate( effDir, NULL, cname, outPath, outSize ) )
+            {
+                return true;
+            }
+        }
+
         // 1a. Check <mods_dir>/<active_mod>/CustomFiles/<file> (LMLM format)
         char sub[512];
         snprintf( sub, sizeof(sub), "%s/CustomFiles", s_ActiveMod );

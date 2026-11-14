@@ -7,7 +7,7 @@
 #include <mission/charactersheet/charactersheet.h>
 
 //maximum number of cars that can get purchase via coins.
-const int MAX_INVENTORY = 8;
+const int MAX_INVENTORY = 64;
 
 struct TokenStoreInventory
 {
@@ -43,7 +43,7 @@ struct CarAttributeRecord
     float mStability;
 };
 
-const int MAX_CAR_ATTRIBUTE_RECORDS = 50;
+const int MAX_CAR_ATTRIBUTE_RECORDS = 128;
 
 
 //Rewards Manager. 
