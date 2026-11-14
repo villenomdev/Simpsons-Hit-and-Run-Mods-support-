@@ -21,6 +21,7 @@
 //===========================================================================
 #include <presentation/gui/guiscreen.h>
 #include <cheats/cheatinputsystem.h>
+#include <input/FEMouse.h>
 
 //===========================================================================
 // Forward References
