@@ -86,6 +86,10 @@ static void LogOutputFunction( void *userdata, int category, SDL_LogPriority pri
 #endif
 }
 
+#if defined(RAD_ANDROID)
+    extern "C" void RadSdlDrive_SetLogHook( void (*hook)( const char* tag, const char* message ) );
+#endif
+
 //=============================================================================
 // Function:    WinMain
 //=============================================================================
@@ -100,6 +104,9 @@ static void LogOutputFunction( void *userdata, int category, SDL_LogPriority pri
 extern "C" int main( int argc, char *argv[] )
 {
     GameLog::Initialize();
+#if defined(RAD_ANDROID)
+    RadSdlDrive_SetLogHook( GameLog_Record );
+#endif
 #ifdef __SWITCH__
 #ifdef RAD_DEBUG
     socketInitializeDefault();

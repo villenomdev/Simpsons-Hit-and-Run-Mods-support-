@@ -55,8 +55,29 @@
 
 
 #if defined(RAD_ANDROID)
-    extern "C" void GameLog_Recordf( const char* tag, const char* fmt, ... );
-    #define LOGI(...) do { __android_log_print(ANDROID_LOG_INFO, "SimpsonsHitAndRun", __VA_ARGS__); GameLog_Recordf("Mods", __VA_ARGS__); } while(0)
+    typedef void (*RadSdlDriveLogHookFn)( const char* tag, const char* message );
+    static RadSdlDriveLogHookFn s_pRadSdlDriveLogHook = NULL;
+
+    extern "C" void RadSdlDrive_SetLogHook( RadSdlDriveLogHookFn hook )
+    {
+        s_pRadSdlDriveLogHook = hook;
+    }
+
+    static void SdlDriveLog( const char* fmt, ... )
+    {
+        char buffer[ 1024 ];
+        va_list args;
+        va_start( args, fmt );
+        vsnprintf( buffer, sizeof( buffer ), fmt, args );
+        va_end( args );
+
+        __android_log_print( ANDROID_LOG_INFO, "SimpsonsHitAndRun", "%s", buffer );
+        if( s_pRadSdlDriveLogHook != NULL )
+        {
+            s_pRadSdlDriveLogHook( "Mods", buffer );
+        }
+    }
+    #define LOGI(...) SdlDriveLog(__VA_ARGS__)
 #endif
 
 #ifdef RAD_ANDROID
