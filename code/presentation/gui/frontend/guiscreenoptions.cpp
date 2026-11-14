@@ -401,7 +401,7 @@ void CGuiScreenOptions::HandleMessage
                             m_modsMenuSelection = count - 1;
                         }
                         this->UpdateModsMenuDisplay();
-                        GetEventManager()->TriggerEvent( EVENT_FE_MENU_UP );
+                        GetEventManager()->TriggerEvent( EVENT_FE_MENU_UPORDOWN );
                     }
                     return;
                 }
@@ -416,7 +416,7 @@ void CGuiScreenOptions::HandleMessage
                             m_modsMenuSelection = 0;
                         }
                         this->UpdateModsMenuDisplay();
-                        GetEventManager()->TriggerEvent( EVENT_FE_MENU_DOWN );
+                        GetEventManager()->TriggerEvent( EVENT_FE_MENU_UPORDOWN );
                     }
                     return;
                 }
