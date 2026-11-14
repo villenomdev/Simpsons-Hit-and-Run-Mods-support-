@@ -44,7 +44,9 @@ public:
 
     virtual void OnCheatEntered( eCheatID cheatID, bool isEnabled );
     virtual CGuiMenu* HasMenu() { return m_pMenu; }
+#ifdef RAD_PC
     virtual eFEHotspotType CheckCursorAgainstHotspots( float x, float y );
+#endif
 
 protected:
     void InitIntro();

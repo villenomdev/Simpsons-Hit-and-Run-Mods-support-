@@ -48,6 +48,10 @@
     #include <main/ps2platform.h>
 #endif
 
+#ifdef RAD_PC
+#include <input/FEMouse.h>
+#endif
+
 //===========================================================================
 // Global Data, Local Data, Local Classes
 //===========================================================================
@@ -272,6 +276,7 @@ CGuiScreenOptions::~CGuiScreenOptions()
     GetCheatInputSystem()->UnregisterCallback( this );
 }
 
+#ifdef RAD_PC
 //===========================================================================
 // CGuiScreenOptions::CheckCursorAgainstHotspots
 //===========================================================================
@@ -329,6 +334,7 @@ eFEHotspotType CGuiScreenOptions::CheckCursorAgainstHotspots( float x, float y )
 
     return CGuiScreen::CheckCursorAgainstHotspots( x, y );
 }
+#endif
 
 
 //===========================================================================
