@@ -24,6 +24,7 @@
 #include <loading/loadingmanager.h>
 #include <memory/leakdetection.h>
 #include <mission/gameplaymanager.h>
+#include <mission/missionmanager.h>
 #include <presentation/gui/guisystem.h>
 #include <worldsim/parkedcars/parkedcarmanager.h>
 #include <worldsim/traffic/trafficmanager.h>
@@ -179,9 +180,9 @@ void LoadingGameplayContext::OnUpdate( unsigned int elapsedTime )
     {
         if( (m_loadingElapsedTicks % 150) == 0 )
         {
-            GameLog_Recordf("LoadingGameplayContext", "Loading context active for %u ticks. State=%d, LM::IsLoading=%d",
+            GameLog_Recordf("LoadingGameplayContext", "Loading context active for %u ticks. MissionState=%d, LM::IsLoading=%d",
                             m_loadingElapsedTicks,
-                            (int)GetGameplayManager()->GetLoadingState(),
+                            (int)(GetMissionManager() ? GetMissionManager()->GetLoadingState() : -1),
                             (int)GetLoadingManager()->IsLoading());
         }
         if( m_loadingElapsedTicks > 900 )
