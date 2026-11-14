@@ -561,6 +561,7 @@ endif()
 
 target_link_libraries(${SRR2_TARGET}
 	${SDL_LIBRARY}
+	lua
 	choreo
 	p3d
 	pddi

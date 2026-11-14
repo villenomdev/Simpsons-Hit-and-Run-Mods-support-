@@ -336,7 +336,7 @@ public:
     
     Vehicle* GetMainAIVehicleForThisStage();
     
-    static const int MAX_VEHICLES = 4;
+    static const int MAX_VEHICLES = 16;
 
 protected:
     void ActivateVehicle( Vehicle* vehicle, bool bIsActive );

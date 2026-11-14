@@ -1,3 +1,4 @@
+add_subdirectory(lua)
 add_subdirectory(choreo)
 add_subdirectory(poser)
 add_subdirectory(pure3d)

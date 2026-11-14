@@ -104,7 +104,7 @@ class VehicleCentral : public LoadingManager::ProcessRequestsCallback
         void Update(float dt);
         void PreCollisionPrep(float dt, bool firstSubstep);
 
-        enum { MAX_ACTIVE_VEHICLES = 30 };
+        enum { MAX_ACTIVE_VEHICLES = 64 };
 
         static int GetMaxActiveVehicles() {return MAX_ACTIVE_VEHICLES;}
 

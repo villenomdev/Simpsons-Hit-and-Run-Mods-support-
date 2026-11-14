@@ -50,6 +50,7 @@
 #include <fnmatch.h>
 #include <fstream>
 #include <algorithm>
+#include "modloader_lua.hpp"
 #endif
 
 
@@ -148,7 +149,7 @@ static void ParseCustomFilesIni( const char* iniPath )
     }
 
     std::string line;
-    int currentSection = 0; // 1: PathRedirections, 2: Miscellaneous
+    int currentSection = 0; // 1: PathRedirections, 2: Miscellaneous, 3: PathHandlers
 
     while( std::getline( file, line ) )
     {
@@ -168,6 +169,10 @@ static void ParseCustomFilesIni( const char* iniPath )
             else if( strcasecmp( sectionName.c_str(), "Miscellaneous" ) == 0 )
             {
                 currentSection = 2;
+            }
+            else if( strcasecmp( sectionName.c_str(), "PathHandlers" ) == 0 )
+            {
+                currentSection = 3;
             }
             else
             {
@@ -215,6 +220,27 @@ static void ParseCustomFilesIni( const char* iniPath )
                     std::string occ = NormalizeModPath( val );
                     s_ModOccludedPaths.push_back( occ );
                     LOGI("[Mods] Loaded occluded path: '%s'", occ.c_str());
+                }
+            }
+        }
+        else if( currentSection == 3 ) // [PathHandlers]
+        {
+            size_t eqPos = trimmed.find( '=' );
+            if( eqPos != std::string::npos )
+            {
+                std::string key = Trim( trimmed.substr( 0, eqPos ) );
+                std::string val = Trim( trimmed.substr( eqPos + 1 ) );
+                size_t cPos = val.find( ';' );
+                if( cPos != std::string::npos ) val = Trim( val.substr( 0, cPos ) );
+                cPos = val.find( '#' );
+                if( cPos != std::string::npos ) val = Trim( val.substr( 0, cPos ) );
+
+                if( !key.empty() && !val.empty() )
+                {
+                    std::string pat = NormalizeModPath( key );
+                    std::string script = NormalizeModPath( val );
+                    ModLoaderLua::GetInstance().AddPathHandler( pat, script );
+                    LOGI("[Mods] Loaded PathHandler: '%s' -> '%s'", pat.c_str(), script.c_str());
                 }
             }
         }
@@ -352,8 +378,15 @@ static void EnsureModIniLoaded()
         s_PrimaryModFoldersScanned = true;
     }
 
+    if( (s_ActiveMod[0] == '\0' || strcmp(s_ActiveMod, "none") == 0) && !s_DiscoveredModFoldersPrimary.empty() )
+    {
+        strncpy( s_ActiveMod, s_DiscoveredModFoldersPrimary[0].c_str(), sizeof(s_ActiveMod) - 1 );
+        s_ActiveMod[ sizeof(s_ActiveMod) - 1 ] = '\0';
+    }
+
     if( s_ActiveMod[0] != '\0' && strcmp( s_ActiveMod, "none" ) != 0 )
     {
+        ModLoaderLua::GetInstance().Initialize( s_ModsDirectory, s_ActiveMod, s_FallbackGameDir );
         ScanModFolderForIni( s_ModsDirectory, s_ActiveMod );
     }
 
@@ -484,6 +517,11 @@ void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* ac
     s_ModIniScanAttempts = 0;
     s_ModPathRedirections.clear();
     s_ModOccludedPaths.clear();
+    ModLoaderLua::GetInstance().Reset();
+    if( s_ModsEnabled && s_ActiveMod[0] != '\0' && strcmp( s_ActiveMod, "none" ) != 0 )
+    {
+        ModLoaderLua::GetInstance().Initialize( s_ModsDirectory, s_ActiveMod, s_FallbackGameDir );
+    }
     LOGI("[Mods] Config updated: enabled=%d, dir='%s', active_mod='%s', safe_frontend=%d",
          s_ModsEnabled ? 1 : 0, s_ModsDirectory, s_ActiveMod, s_SafeFrontend ? 1 : 0);
 }
@@ -758,6 +796,22 @@ static bool FindModFile( const char* rawFileName, char* outPath, size_t outSize 
     {
         targetName = redirected;
         LOGI("[Mods] Path redirection in FindModFile: '%s' -> '%s'", cleanName.c_str(), targetName.c_str());
+    }
+
+    std::string luaResolved;
+    if( ModLoaderLua::GetInstance().HandleFileRequest( cleanName.c_str(), luaResolved ) )
+    {
+        strncpy( outPath, luaResolved.c_str(), outSize - 1 );
+        outPath[ outSize - 1 ] = '\0';
+        LOGI("[Mods] Handled by Lua PathHandler: '%s' -> '%s'", cleanName.c_str(), outPath);
+        return true;
+    }
+    if( targetName != cleanName && ModLoaderLua::GetInstance().HandleFileRequest( targetName.c_str(), luaResolved ) )
+    {
+        strncpy( outPath, luaResolved.c_str(), outSize - 1 );
+        outPath[ outSize - 1 ] = '\0';
+        LOGI("[Mods] Handled by Lua PathHandler (redirected): '%s' -> '%s'", targetName.c_str(), outPath);
+        return true;
     }
 
     const char* cname = targetName.c_str();

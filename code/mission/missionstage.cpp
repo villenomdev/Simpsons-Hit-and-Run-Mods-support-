@@ -2493,7 +2493,8 @@ void MissionStage::GetStageMusicState( radKey32& stateKey, radKey32& stateEventK
 //returns the vehicle that hopefully is the main AI vehicle
 Vehicle* MissionStage::GetMainAIVehicleForThisStage()
 {
-    int indexArray[MAX_VEHICLES] = {-1,-1,-1,-1};
+    int indexArray[MAX_VEHICLES];
+    for (int k = 0; k < MAX_VEHICLES; ++k) indexArray[k] = -1;
     bool isAISlotInThisList = false;
     Vehicle* pAISlotVehicle = NULL;
 
