@@ -65,31 +65,37 @@ public class SimpsonsActivity extends SDLActivity {
 
     private void ensureStorageDirectories() {
         try {
-            File[] rootDirs = new File[] {
-                new File(Environment.getExternalStorageDirectory(), "Simpsons Hit and Run"),
-                new File(Environment.getExternalStorageDirectory(), "Simpsons and Run")
-            };
-
-            for (File rootDir : rootDirs) {
-                if (!rootDir.exists()) {
-                    boolean created = rootDir.mkdirs();
-                    Log.i(TAG, "Created root directory: " + rootDir.getAbsolutePath() + " (" + created + ")");
-                } else {
-                    Log.i(TAG, "root directory exists: " + rootDir.getAbsolutePath());
-                }
-
-                File filesDir = new File(rootDir, "files");
-                if (!filesDir.exists()) {
-                    boolean created = filesDir.mkdirs();
-                    Log.i(TAG, "Created files directory: " + filesDir.getAbsolutePath() + " (" + created + ")");
-                }
-
-                File modsDir = new File(rootDir, "mods");
-                if (!modsDir.exists()) {
-                    boolean created = modsDir.mkdirs();
-                    Log.i(TAG, "Created mods directory: " + modsDir.getAbsolutePath() + " (" + created + ")");
-                }
+            File rootDir = new File(Environment.getExternalStorageDirectory(), "Simpsons Hit and Run");
+            if (!rootDir.exists()) {
+                boolean created = rootDir.mkdirs();
+                Log.i(TAG, "Created root directory: " + rootDir.getAbsolutePath() + " (" + created + ")");
+            } else {
+                Log.i(TAG, "root directory exists: " + rootDir.getAbsolutePath());
             }
+
+            File filesDir = new File(rootDir, "files");
+            if (!filesDir.exists()) {
+                boolean created = filesDir.mkdirs();
+                Log.i(TAG, "Created files directory: " + filesDir.getAbsolutePath() + " (" + created + ")");
+            }
+
+            File modsDir = new File(rootDir, "mods");
+            if (!modsDir.exists()) {
+                boolean created = modsDir.mkdirs();
+                Log.i(TAG, "Created mods directory: " + modsDir.getAbsolutePath() + " (" + created + ")");
+            }
+
+            // Clean up old incorrect directory if it exists
+            try {
+                File oldDir = new File(Environment.getExternalStorageDirectory(), "Simpsons and Run");
+                if (oldDir.exists()) {
+                    File oldMods = new File(oldDir, "mods");
+                    if (oldMods.exists()) oldMods.delete();
+                    File oldFiles = new File(oldDir, "files");
+                    if (oldFiles.exists()) oldFiles.delete();
+                    oldDir.delete();
+                }
+            } catch (Throwable ignored) {}
         } catch (Exception e) {
             Log.e(TAG, "Failed to create storage directories", e);
         }

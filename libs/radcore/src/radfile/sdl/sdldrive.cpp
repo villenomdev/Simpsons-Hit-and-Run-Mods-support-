@@ -1405,6 +1405,15 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
     }
     else
     {
+#if defined(RAD_ANDROID)
+        if( s_pRadSdlDriveLogHook != NULL )
+        {
+            char failBuf[ 512 ];
+            snprintf( failBuf, sizeof( failBuf ), "Failed to open file: '%s' (full path: '%s', mode: '%s', SDL_Error: '%s')",
+                      fileName ? fileName : "(null)", fullName, createFlags ? createFlags : "(null)", SDL_GetError() );
+            s_pRadSdlDriveLogHook( "FileIO", failBuf );
+        }
+#endif
         m_LastError = FileNotFound;
         return Error;
     }

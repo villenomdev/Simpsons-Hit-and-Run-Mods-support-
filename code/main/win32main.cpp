@@ -72,7 +72,32 @@ static void ProcessCommandLineArgumentsFromFile();
 
 static void LogOutputFunction( void *userdata, int category, SDL_LogPriority priority, const char *message )
 {
-    GameLog_Record( "SDL", message );
+    const char* tag = "SDL";
+    if ( priority == SDL_LOG_PRIORITY_ERROR || priority == SDL_LOG_PRIORITY_CRITICAL )
+    {
+        tag = "ERROR";
+    }
+    else if ( priority == SDL_LOG_PRIORITY_WARN )
+    {
+        tag = "WARN";
+    }
+    else if ( message != NULL )
+    {
+        if ( strstr( message, "ASSERT" ) != NULL || strstr( message, "assert" ) != NULL )
+        {
+            tag = "ASSERT";
+        }
+        else if ( strstr( message, "ERROR" ) != NULL || strstr( message, "Error" ) != NULL || strstr( message, "failed" ) != NULL || strstr( message, "FAILED" ) != NULL )
+        {
+            tag = "ERROR";
+        }
+        else if ( strstr( message, "WARN" ) != NULL || strstr( message, "Warning" ) != NULL )
+        {
+            tag = "WARN";
+        }
+    }
+
+    GameLog_Record( tag, message );
 
 #ifdef RAD_VITA
     sceClibPrintf( "%s\n", message );
@@ -144,10 +169,12 @@ extern "C" int main( int argc, char *argv[] )
     SDL_Init( SDL_INIT_EVENTS | SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER );
 
     SDL_LogSetOutputFunction( LogOutputFunction, NULL );
+    SDL_LogSetAllPriority( SDL_LOG_PRIORITY_VERBOSE );
 #else
     SDL_Init( SDL_INIT_EVENTS | SDL_INIT_VIDEO | SDL_INIT_GAMEPAD );
 
     SDL_SetLogOutputFunction( LogOutputFunction, NULL );
+    SDL_LogSetAllPriority( SDL_LOG_PRIORITY_VERBOSE );
 #endif
 
 

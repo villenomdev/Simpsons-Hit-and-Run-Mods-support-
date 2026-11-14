@@ -39,6 +39,7 @@
 #include <main/game.h>
 #include <memory/memoryutilities.h>
 #include <memory/srrmemory.h>
+#include <debug/gamelog.h>
 
 //******************************************************************************
 //
@@ -201,8 +202,30 @@ void GameFlow::PopContext()
 // Return:      None.
 //
 //==============================================================================
+static const char* GetContextDebugName( ContextEnum ctx )
+{
+    switch( ctx )
+    {
+        case CONTEXT_ENTRY: return "ENTRY";
+        case CONTEXT_BOOTUP: return "BOOTUP";
+        case CONTEXT_FRONTEND: return "FRONTEND (Menus/Options)";
+        case CONTEXT_LOADING_DEMO: return "LOADING_DEMO";
+        case CONTEXT_DEMO: return "DEMO";
+        case CONTEXT_SUPERSPRINT_FE: return "SUPERSPRINT_FE";
+        case CONTEXT_LOADING_SUPERSPRINT: return "LOADING_SUPERSPRINT";
+        case CONTEXT_SUPERSPRINT: return "SUPERSPRINT (Minigame)";
+        case CONTEXT_LOADING_GAMEPLAY: return "LOADING_GAMEPLAY (Mission/Level Load)";
+        case CONTEXT_GAMEPLAY: return "GAMEPLAY (In-Game Active)";
+        case CONTEXT_PAUSE: return "PAUSE";
+        case CONTEXT_EXIT: return "EXIT";
+        default: return "UNKNOWN";
+    }
+}
+
 void GameFlow::SetContext( ContextEnum context )
 {
+    GameLog_Recordf( "GameFlow", "Context transition -> %s", GetContextDebugName( context ) );
+
     while( !mContextStack.empty() )
     {
         mContextStack.pop();

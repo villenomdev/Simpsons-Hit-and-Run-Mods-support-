@@ -7,8 +7,8 @@
 // Subsystem:   Debug Services / Execution Logging
 //
 // Description: Centralized in-memory and on-disk execution logger for the game.
-//              Records game operation logs and outputs gamelog.txt when enabled
-//              from Options -> Gamelog.
+//              Records detailed game operation logs, subsystem diagnostics and
+//              crash traces to gamelog.txt when enabled from Options -> Gamelog.
 //
 //=============================================================================
 
@@ -42,6 +42,8 @@ namespace
     std::vector<std::string> s_entries;
     std::vector<FILE*> s_openFiles;
     char s_savedPath[ 512 ] = { 0 };
+    char s_activeModName[ 256 ] = "None";
+    char s_activeModsDir[ 512 ] = "/storage/emulated/0/Simpsons Hit and Run/mods";
 
     void EnsureDirectoryExists( const std::string& path )
     {
@@ -76,6 +78,39 @@ namespace
         }
     }
 
+    const char* ClassifyLogLevel( const char* tag, const char* message )
+    {
+        if( tag != NULL )
+        {
+            if( strcasecmp( tag, "ERROR" ) == 0 ) return "ERROR ";
+            if( strcasecmp( tag, "FATAL" ) == 0 || strcasecmp( tag, "CRASH" ) == 0 ) return "FATAL ";
+            if( strcasecmp( tag, "ASSERT" ) == 0 ) return "ASSERT";
+            if( strcasecmp( tag, "WARN" ) == 0 || strcasecmp( tag, "WARNING" ) == 0 ) return "WARN  ";
+        }
+
+        if( message != NULL )
+        {
+            if( strstr( message, "ASSERT FAILED" ) != NULL || strstr( message, "Assertion failed" ) != NULL )
+            {
+                return "ASSERT";
+            }
+            if( strstr( message, "FATAL" ) != NULL || strstr( message, "Fatal" ) != NULL )
+            {
+                return "FATAL ";
+            }
+            if( strstr( message, "ERROR" ) != NULL || strstr( message, "Error" ) != NULL || strstr( message, "FAIL" ) != NULL )
+            {
+                return "ERROR ";
+            }
+            if( strstr( message, "WARN" ) != NULL || strstr( message, "Warning" ) != NULL )
+            {
+                return "WARN  ";
+            }
+        }
+
+        return "INFO  ";
+    }
+
     void CloseOpenFilesInternal()
     {
         for( size_t i = 0; i < s_openFiles.size(); i++ )
@@ -97,23 +132,15 @@ namespace
         std::vector<std::string> targetDirs;
 
 #if defined(RAD_ANDROID)
-        targetDirs.push_back( "/storage/emulated/0/Simpsons and Run" );
+        // STRICT USER REQUIREMENT: Only "Simpsons Hit and Run" on shared internal storage
         targetDirs.push_back( "/storage/emulated/0/Simpsons Hit and Run" );
-        targetDirs.push_back( "/storage/emulated/0/Simpsons and Run/files" );
         targetDirs.push_back( "/storage/emulated/0/Simpsons Hit and Run/files" );
-        targetDirs.push_back( "/sdcard/Simpsons and Run" );
         targetDirs.push_back( "/sdcard/Simpsons Hit and Run" );
 
         const char* extBase = SDL_AndroidGetExternalStoragePath();
         if( extBase != NULL && extBase[ 0 ] != '\0' )
         {
             targetDirs.push_back( extBase );
-        }
-
-        const char* intBase = SDL_AndroidGetInternalStoragePath();
-        if( intBase != NULL && intBase[ 0 ] != '\0' )
-        {
-            targetDirs.push_back( intBase );
         }
 #endif
         targetDirs.push_back( "." );
@@ -125,6 +152,17 @@ namespace
             strftime( startStr, sizeof( startStr ), "%Y-%m-%d %H:%M:%S", startInfo );
         }
 
+        const char* abi = "arm64-v8a / armeabi-v7a";
+#if defined(__aarch64__)
+        abi = "arm64-v8a (64-bit)";
+#elif defined(__arm__)
+        abi = "armeabi-v7a (32-bit)";
+#elif defined(__x86_64__)
+        abi = "x86_64";
+#elif defined(__i386__)
+        abi = "x86";
+#endif
+
         for( size_t i = 0; i < targetDirs.size(); i++ )
         {
             EnsureDirectoryExists( targetDirs[ i ] );
@@ -134,9 +172,13 @@ namespace
             if( fp != NULL )
             {
                 fprintf( fp, "================================================================================\n" );
-                fprintf( fp, "The Simpsons: Hit & Run - Android Game Log\n" );
+                fprintf( fp, "The Simpsons: Hit & Run - Diagnostic Game Log\n" );
                 fprintf( fp, "Target file:     %s\n", filePath.c_str() );
+                fprintf( fp, "App Version:     v0.93.19 (versionCode 112)\n" );
+                fprintf( fp, "Architecture:    %s\n", abi );
                 fprintf( fp, "Session started: %s\n", startStr );
+                fprintf( fp, "Active Mod:      %s\n", s_activeModName );
+                fprintf( fp, "Mods Directory:  %s\n", s_activeModsDir );
                 fprintf( fp, "================================================================================\n\n" );
 
                 // Dump all prior entries
@@ -158,16 +200,59 @@ namespace
 
 #if defined(RAD_ANDROID)
                 __android_log_print( ANDROID_LOG_INFO, "SimpsonsHitAndRun",
-                                     "[GameLog] Active log stream opened at: '%s'", filePath.c_str() );
+                                     "[GameLog] Active diagnostic log stream opened at: '%s'", filePath.c_str() );
 #endif
             }
         }
     }
 
-    void SignalHandler( int /*sig*/ )
+    void SignalHandler( int sig )
     {
         GameLog::Shutdown();
         _exit( 0 );
+    }
+
+    void FatalCrashHandler( int sig, siginfo_t* info, void* /*ucontext*/ )
+    {
+        const char* sigName = "UNKNOWN";
+        switch( sig )
+        {
+            case SIGSEGV: sigName = "SIGSEGV (Segmentation Fault / Invalid Memory Access)"; break;
+            case SIGABRT: sigName = "SIGABRT (Aborted / Assertion Failure)"; break;
+            case SIGFPE:  sigName = "SIGFPE (Arithmetic Exception / Division by Zero)"; break;
+            case SIGBUS:  sigName = "SIGBUS (Bus Error / Misaligned Memory Access)"; break;
+            case SIGILL:  sigName = "SIGILL (Illegal Instruction)"; break;
+            default:      sigName = "Fatal Signal"; break;
+        }
+
+        char crashHeader[ 512 ];
+        snprintf( crashHeader, sizeof( crashHeader ),
+                  "\n================================================================================\n"
+                  "[FATAL CRASH DETECTED]\n"
+                  "Signal:          %d (%s)\n"
+                  "Fault Address:   %p\n"
+                  "Description:     The game process encountered a critical fatal error and crashed.\n"
+                  "================================================================================\n",
+                  sig, sigName, info ? info->si_addr : NULL );
+
+        // Write directly to open log streams
+        for( size_t i = 0; i < s_openFiles.size(); i++ )
+        {
+            if( s_openFiles[ i ] != NULL )
+            {
+                fputs( crashHeader, s_openFiles[ i ] );
+                fflush( s_openFiles[ i ] );
+                fsync( fileno( s_openFiles[ i ] ) );
+            }
+        }
+
+#if defined(RAD_ANDROID)
+        __android_log_print( ANDROID_LOG_ERROR, "SimpsonsHitAndRun", "%s", crashHeader );
+#endif
+
+        // Reset signal to default and re-raise so system crash handler can take over
+        signal( sig, SIG_DFL );
+        raise( sig );
     }
 }
 
@@ -181,17 +266,24 @@ void GameLog::Initialize()
     }
 
     time( &s_startTime );
-    s_entries.reserve( 1024 );
+    s_entries.reserve( 2048 );
+
+    // Clean up old incorrect directory on internal storage if leftover
+    rmdir( "/storage/emulated/0/Simpsons and Run/files" );
+    rmdir( "/storage/emulated/0/Simpsons and Run/mods" );
+    rmdir( "/storage/emulated/0/Simpsons and Run" );
 
     char timeStr[ 64 ];
     FormatTimestamp( timeStr, sizeof( timeStr ) );
 
     char initMsg[ 256 ];
-    snprintf( initMsg, sizeof( initMsg ), "[%s] [GameLog] Initialized execution log system (default: Off)", timeStr );
+    snprintf( initMsg, sizeof( initMsg ),
+              "[%s] [INFO  ] [GameLog   ] Initialized diagnostic execution log (v0.93.19)", timeStr );
     s_entries.push_back( initMsg );
 
     s_initialized = true;
 
+    // Normal termination signals
     struct sigaction sa;
     memset( &sa, 0, sizeof( sa ) );
     sa.sa_handler = &SignalHandler;
@@ -199,7 +291,33 @@ void GameLog::Initialize()
     sigaction( SIGINT, &sa, NULL );
     sigaction( SIGHUP, &sa, NULL );
 
+    // Fatal crash interception
+    struct sigaction saFatal;
+    memset( &saFatal, 0, sizeof( saFatal ) );
+    saFatal.sa_flags = SA_SIGINFO;
+    saFatal.sa_sigaction = &FatalCrashHandler;
+    sigaction( SIGSEGV, &saFatal, NULL );
+    sigaction( SIGABRT, &saFatal, NULL );
+    sigaction( SIGFPE,  &saFatal, NULL );
+    sigaction( SIGBUS,  &saFatal, NULL );
+    sigaction( SIGILL,  &saFatal, NULL );
+
     atexit( &GameLog::Shutdown );
+}
+
+void GameLog::SetActiveMod( const char* modName, const char* modsDir )
+{
+    std::lock_guard<std::mutex> lock( s_mutex );
+    if( modName != NULL && modName[ 0 ] != '\0' )
+    {
+        strncpy( s_activeModName, modName, sizeof( s_activeModName ) - 1 );
+        s_activeModName[ sizeof( s_activeModName ) - 1 ] = '\0';
+    }
+    if( modsDir != NULL && modsDir[ 0 ] != '\0' )
+    {
+        strncpy( s_activeModsDir, modsDir, sizeof( s_activeModsDir ) - 1 );
+        s_activeModsDir[ sizeof( s_activeModsDir ) - 1 ] = '\0';
+    }
 }
 
 void GameLog::Shutdown()
@@ -218,7 +336,7 @@ void GameLog::Shutdown()
         if( s_openFiles[ i ] != NULL )
         {
             fprintf( s_openFiles[ i ], "\n================================================================================\n" );
-            fprintf( s_openFiles[ i ], "End of Game Log (Shutdown at %s, total entries: %zu)\n", timeStr, s_entries.size() );
+            fprintf( s_openFiles[ i ], "End of Game Log (Clean Session Termination at %s | Total entries: %zu)\n", timeStr, s_entries.size() );
             fprintf( s_openFiles[ i ], "================================================================================\n" );
             fflush( s_openFiles[ i ] );
             fsync( fileno( s_openFiles[ i ] ) );
@@ -229,7 +347,7 @@ void GameLog::Shutdown()
 
 #if defined(RAD_ANDROID)
     __android_log_print( ANDROID_LOG_INFO, "SimpsonsHitAndRun",
-                         "[GameLog] Closed and synced gamelog.txt files on exit." );
+                         "[GameLog] Diagnostic gamelog.txt successfully closed and synced." );
 #endif
 }
 
@@ -248,7 +366,7 @@ void GameLog::SetEnabled( bool enable )
     FormatTimestamp( timeStr, sizeof( timeStr ) );
 
     char statusMsg[ 256 ];
-    snprintf( statusMsg, sizeof( statusMsg ), "[%s] [GameLog] Gamelog option changed to %s by user",
+    snprintf( statusMsg, sizeof( statusMsg ), "[%s] [INFO  ] [GameLog   ] Gamelog option changed to %s by user",
               timeStr, s_enabled ? "ON" : "OFF" );
     s_entries.push_back( statusMsg );
 
@@ -275,7 +393,7 @@ bool GameLog::Toggle()
     FormatTimestamp( timeStr, sizeof( timeStr ) );
 
     char statusMsg[ 256 ];
-    snprintf( statusMsg, sizeof( statusMsg ), "[%s] [GameLog] Gamelog option toggled to %s by user",
+    snprintf( statusMsg, sizeof( statusMsg ), "[%s] [INFO  ] [GameLog   ] Gamelog option toggled to %s by user",
               timeStr, s_enabled ? "ON" : "OFF" );
     s_entries.push_back( statusMsg );
 
@@ -330,13 +448,15 @@ void GameLog::LogTagged( const char* tag, const char* message )
         return;
     }
 
+    const char* level = ClassifyLogLevel( tag, message );
+    const char* safeTag = ( tag && tag[ 0 ] != '\0' ) ? tag : "Game";
+
+    char lineHeader[ 128 ];
+    snprintf( lineHeader, sizeof( lineHeader ), "[%s] [%-6s] [%-10s] ", timeStr, level, safeTag );
+
     std::string line;
-    line.reserve( 32 + ( tag ? strlen( tag ) : 4 ) + msgLen );
-    line += "[";
-    line += timeStr;
-    line += "] [";
-    line += ( tag && tag[ 0 ] != '\0' ) ? tag : "Game";
-    line += "] ";
+    line.reserve( strlen( lineHeader ) + msgLen );
+    line += lineHeader;
     line.append( message, msgLen );
 
     if( s_entries.size() >= MAX_LOG_ENTRIES )
@@ -407,7 +527,7 @@ void GameLog::Flush()
     {
         if( s_openFiles[ i ] != NULL )
         {
-            fprintf( s_openFiles[ i ], "[%s] [GameLog] -- Log buffer synced to disk --\n", timeStr );
+            fprintf( s_openFiles[ i ], "[%s] [INFO  ] [GameLog   ] -- Log buffer synced to disk --\n", timeStr );
             fflush( s_openFiles[ i ] );
             fsync( fileno( s_openFiles[ i ] ) );
         }

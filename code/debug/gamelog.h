@@ -7,8 +7,8 @@
 // Subsystem:   Debug Services / Execution Logging
 //
 // Description: Centralized in-memory and on-disk execution logger for the game.
-//              Records game operation logs and outputs gamelog.txt on exit when
-//              enabled from Options -> Gamelog.
+//              Records game operation logs, subsystem diagnostics and crash
+//              traces to gamelog.txt when enabled from Options -> Gamelog.
 //
 //=============================================================================
 
@@ -30,6 +30,8 @@ public:
     static void Log( const char* message );
     static void LogTagged( const char* tag, const char* message );
     static void Logf( const char* tag, const char* fmt, ... );
+
+    static void SetActiveMod( const char* modName, const char* modsDir );
 
     static void SaveToFile();
     static void Flush();
