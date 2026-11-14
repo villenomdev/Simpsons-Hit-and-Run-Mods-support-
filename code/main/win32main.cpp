@@ -39,15 +39,17 @@ unsigned int sceLibcHeapSize = 16 * 1024 * 1024;
 
 
 
+#include <debug/gamelog.h>
+
 //========================================
 // Logging helper (cross-platform)
 //========================================
 #if defined(RAD_ANDROID)
-    #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "SimpsonsHitAndRun", __VA_ARGS__)
+    #define LOGI(...) do { __android_log_print(ANDROID_LOG_INFO, "SimpsonsHitAndRun", __VA_ARGS__); GameLog_Recordf("SimpsonsHitAndRun", __VA_ARGS__); } while(0)
 #elif defined(RAD_VITA)
-    #define LOGI(...) sceClibPrintf(__VA_ARGS__), sceClibPrintf("\n")
+    #define LOGI(...) do { sceClibPrintf(__VA_ARGS__); sceClibPrintf("\n"); GameLog_Recordf("SimpsonsHitAndRun", __VA_ARGS__); } while(0)
 #else
-    #define LOGI(...) do { printf(__VA_ARGS__); printf("\n"); fflush(stdout); } while(0)
+    #define LOGI(...) do { printf(__VA_ARGS__); printf("\n"); fflush(stdout); GameLog_Recordf("SimpsonsHitAndRun", __VA_ARGS__); } while(0)
 #endif
 
 //========================================
@@ -70,11 +72,13 @@ static void ProcessCommandLineArgumentsFromFile();
 
 static void LogOutputFunction( void *userdata, int category, SDL_LogPriority priority, const char *message )
 {
+    GameLog_Record( "SDL", message );
+
 #ifdef RAD_VITA
     sceClibPrintf( "%s\n", message );
 	
 #elif defined(RAD_ANDROID)
-	LOGI("%s", message);
+	__android_log_print(ANDROID_LOG_INFO, "SimpsonsHitAndRun", "%s", message);
 
 #else
     printf( "%s\n", message );
@@ -95,6 +99,7 @@ static void LogOutputFunction( void *userdata, int category, SDL_LogPriority pri
 //=============================================================================
 extern "C" int main( int argc, char *argv[] )
 {
+    GameLog::Initialize();
 #ifdef __SWITCH__
 #ifdef RAD_DEBUG
     socketInitializeDefault();
@@ -266,6 +271,8 @@ extern "C" int main( int argc, char *argv[] )
     // Shutdown SDL subsystems
     //
     SDL_Quit();
+
+    GameLog::Shutdown();
 
     //
     // Pass any error codes back to the operating system.

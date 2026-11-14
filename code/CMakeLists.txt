@@ -95,6 +95,7 @@ set(SRR2_SOURCES
 	"data/savegameinfo.cpp"
 	"data/config/androidconfigurationmanager.cpp"
 	"debug/debuginfo.cpp"
+	"debug/gamelog.cpp"
 	"debug/profiler.cpp"
 	"debug/section.cpp"
 	"events/eventlistener.cpp"

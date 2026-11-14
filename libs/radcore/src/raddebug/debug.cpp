@@ -348,11 +348,7 @@ void rDebugString_Implementation( const char * pString )
 //
 // Notes:
 //------------------------------------------------------------------------------
-#if defined( RAD_RELEASE )
-bool g_AllowDebugOutput = false;
-#else
 bool g_AllowDebugOutput = true;
-#endif
 
 void rDebuggerString_Implementation( const char* string )
 {

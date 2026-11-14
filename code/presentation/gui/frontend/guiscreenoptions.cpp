@@ -25,6 +25,8 @@
 
 #include <cheats/cheatinputsystem.h>
 #include <cheats/cheats.h>
+#include <debug/gamelog.h>
+#include <events/eventmanager.h>
 #include <memory/srrmemory.h>
 
 #include <raddebug.hpp> // Foundation
@@ -109,47 +111,66 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenOptions" );
     }
 #endif
 
-    m_pMenu->AddMenuItem( pGroup->GetText( "DisplayMode" ),
-                          pGroup->GetText( "DisplayMode_Value" ),
-                          NULL,
-                          NULL,
-                          pGroup->GetSprite( "DisplayMode_ArrowL" ),
-                          pGroup->GetSprite( "DisplayMode_ArrowR" ),
-                          SELECTION_ENABLED | VALUES_WRAPPED | TEXT_OUTLINE_ENABLED );
+    // Setup Gamelog menu item, placed directly below View Credits
+    Scrooby::Text* gamelogText = pGroup->GetText( "DisplayMode" );
+    if( gamelogText != NULL )
+    {
+        Scrooby::Text* creditsText = pGroup->GetText( "ViewCredits" );
+        if( creditsText != NULL )
+        {
+            int cWidth = 0, cHeight = 0;
+            creditsText->GetBoundingBoxSize( cWidth, cHeight );
+            int cCenterX = 0, cCenterY = 0;
+            creditsText->GetBoundingBoxCenter( cCenterX, cCenterY );
+
+            int gWidth = 0, gHeight = 0;
+            gamelogText->GetBoundingBoxSize( gWidth, gHeight );
+            int gCenterX = 0, gCenterY = 0;
+            gamelogText->GetBoundingBoxCenter( gCenterX, gCenterY );
+
+            int targetWidth = ( cWidth > gWidth ) ? cWidth : gWidth;
+            if( targetWidth < 300 ) targetWidth = 300;
+            int targetHeight = ( cHeight > gHeight ) ? cHeight : gHeight;
+            if( targetHeight < 30 ) targetHeight = 30;
+
+            gamelogText->SetBoundingBoxSize( targetWidth, targetHeight );
+            gamelogText->SetHorizontalJustification( creditsText->GetHorizontalJustification() );
+            gamelogText->SetVerticalJustification( creditsText->GetVerticalJustification() );
+            gamelogText->SetPositionOfCenter( cCenterX, gCenterY );
+        }
+
+        gamelogText->SetString( 0, GameLog::IsEnabled() ? "Gamelog (On)" : "Gamelog (Off)" );
+        gamelogText->SetVisible( true );
+    }
+
+    // Hide unused DisplayMode elements
+    Scrooby::Text* displayModeValue = pGroup->GetText( "DisplayMode_Value" );
+    if( displayModeValue != NULL )
+    {
+        displayModeValue->SetVisible( false );
+    }
+    Scrooby::Sprite* arrowL = pGroup->GetSprite( "DisplayMode_ArrowL" );
+    if( arrowL != NULL )
+    {
+        arrowL->SetVisible( false );
+    }
+    Scrooby::Sprite* arrowR = pGroup->GetSprite( "DisplayMode_ArrowR" );
+    if( arrowR != NULL )
+    {
+        arrowR->SetVisible( false );
+    }
+
+    m_pMenu->AddMenuItem( gamelogText );
 
 #ifdef RAD_DEMO
     m_pMenu->SetMenuItemEnabled( MENU_ITEM_VIEW_MOVIES, false );
     m_pMenu->SetMenuItemEnabled( MENU_ITEM_VIEW_CREDITS, false );
 #endif
 
-/*
-#ifdef RAD_RELEASE
-    // hide 'view movies' in release build
-    //
-    m_pMenu->SetMenuItemEnabled( MENU_ITEM_VIEW_MOVIES, false, true );
-#else
-    // center menu items
-    //
+#ifndef RAD_PC
+    // Keep 5 items centered with default Scrooby layout
     pGroup->ResetTransformation();
-    pGroup->Translate( 0, 30 );
 #endif
-*/
-
-    // TC: no more display mode menu item on PS2, this is now done during bootup
-    //     w/ specific button combo pressed and a display prompt
-    //
-//#ifndef RAD_PS2
-    // hide display mode menu item for non-PS2 platforms
-    //
-    m_pMenu->SetMenuItemEnabled( MENU_ITEM_DISPLAY_MODE, false, true );
-
-    #ifndef RAD_PC
-    // re-center menu items
-    //
-    pGroup->ResetTransformation();
-    pGroup->Translate( 0, -30 );
-    #endif
-//#endif // !RAD_PS2
 
     // get cheats page, if included
     //
@@ -317,26 +338,18 @@ void CGuiScreenOptions::HandleMessage
         {
             case GUI_MSG_MENU_SELECTION_CHANGED:
             {
-                this->SetButtonVisible( BUTTON_ICON_ACCEPT, param1 != MENU_ITEM_DISPLAY_MODE );
+                this->SetButtonVisible( BUTTON_ICON_ACCEPT, true );
 
                 break;
             }
-            case GUI_MSG_MENU_SELECTION_VALUE_CHANGED:
+            case GUI_MSG_CONTROLLER_LEFT:
+            case GUI_MSG_CONTROLLER_RIGHT:
             {
-                if( param1 == MENU_ITEM_DISPLAY_MODE )
+                if( m_pMenu != NULL && m_pMenu->GetSelection() == MENU_ITEM_GAMELOG )
                 {
-                    if( param2 == 1 ) // progressive mode
-                    {
-                        // display confirmation prompt
-                        //
-                        m_guiManager->DisplayPrompt( PROMPT_DISPLAY_PROGRESSIVE_SCAN_PS2, this );
-                    }
-                    else // interlaced mode
-                    {
-#ifdef RAD_PS2
-                        PS2Platform::GetInstance()->SetProgressiveMode( false );
-#endif
-                    }
+                    GameLog::Toggle();
+                    this->UpdateGamelogDisplay();
+                    GetEventManager()->TriggerEvent( EVENT_FE_MENU_SELECT );
                 }
 
                 break;
@@ -380,6 +393,14 @@ void CGuiScreenOptions::HandleMessage
                         m_pParent->HandleMessage( GUI_MSG_GOTO_SCREEN, GUI_SCREEN_ID_VIEW_CREDITS );
 
                         this->StartTransitionAnimation( 600, 630 );
+
+                        break;
+                    }
+                    case MENU_ITEM_GAMELOG:
+                    {
+                        GameLog::Toggle();
+                        this->UpdateGamelogDisplay();
+                        GetEventManager()->TriggerEvent( EVENT_FE_MENU_SELECT );
 
                         break;
                     }
@@ -476,17 +497,8 @@ void CGuiScreenOptions::InitIntro()
     #endif
 
     rAssert( m_pMenu != NULL );
-    if( m_pMenu->GetSelection() == MENU_ITEM_DISPLAY_MODE )
-    {
-        this->SetButtonVisible( BUTTON_ICON_ACCEPT, false );
-    }
-
-#ifdef RAD_PS2
-    // update current display mode
-    //
-    m_pMenu->SetSelectionValue( MENU_ITEM_DISPLAY_MODE,
-                                PS2Platform::GetInstance()->GetProgressiveMode() ? 1 : 0 );
-#endif
+    this->SetButtonVisible( BUTTON_ICON_ACCEPT, true );
+    this->UpdateGamelogDisplay();
 }
 
 
@@ -534,6 +546,24 @@ TouchHudSystem::GetInstance().SetTouchControlsEditorMainMenuEntryAllowed( false 
 //---------------------------------------------------------------------
 // Private Functions
 //---------------------------------------------------------------------
+
+void
+CGuiScreenOptions::UpdateGamelogDisplay()
+{
+    Scrooby::Page* pPage = m_pScroobyScreen->GetPage( "Options" );
+    if( pPage != NULL )
+    {
+        Scrooby::Group* pGroup = pPage->GetGroup( "Menu" );
+        if( pGroup != NULL )
+        {
+            Scrooby::Text* gamelogText = pGroup->GetText( "DisplayMode" );
+            if( gamelogText != NULL )
+            {
+                gamelogText->SetString( 0, GameLog::IsEnabled() ? "Gamelog (On)" : "Gamelog (Off)" );
+            }
+        }
+    }
+}
 
 void
 CGuiScreenOptions::UpdateCheatsDisplay( int cheatID )

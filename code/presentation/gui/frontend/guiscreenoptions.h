@@ -51,6 +51,7 @@ protected:
 
 private:
     void UpdateCheatsDisplay( int cheatID );
+    void UpdateGamelogDisplay();
 
     void ProgressiveModeTestBegin();
     void OnProgressiveModeTestEnd();
@@ -64,7 +65,7 @@ private:
         MENU_ITEM_SOUND,
         MENU_ITEM_VIEW_MOVIES,
         MENU_ITEM_VIEW_CREDITS,
-        MENU_ITEM_DISPLAY_MODE,
+        MENU_ITEM_GAMELOG,
 
         NUM_MENU_ITEMS
     };

@@ -55,7 +55,8 @@
 
 
 #if defined(RAD_ANDROID)
-    #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "SimpsonsHitAndRun", __VA_ARGS__)
+    extern "C" void GameLog_Recordf( const char* tag, const char* fmt, ... );
+    #define LOGI(...) do { __android_log_print(ANDROID_LOG_INFO, "SimpsonsHitAndRun", __VA_ARGS__); GameLog_Recordf("Mods", __VA_ARGS__); } while(0)
 #endif
 
 #ifdef RAD_ANDROID
