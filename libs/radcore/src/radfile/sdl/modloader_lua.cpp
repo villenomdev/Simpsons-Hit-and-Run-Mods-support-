@@ -368,11 +368,31 @@ void ModLoaderLua::Reset()
 
 void ModLoaderLua::AddPathHandler( const std::string& pattern, const std::string& scriptPath )
 {
+    std::string normPattern = pattern;
+    for( size_t i = 0; i < normPattern.size(); ++i )
+    {
+        if( normPattern[i] == '\\' ) normPattern[i] = '/';
+    }
+    while( !normPattern.empty() && ( normPattern[0] == '/' || normPattern[0] == '.' ) )
+    {
+        normPattern.erase( 0, 1 );
+    }
+
+    std::string normScript = scriptPath;
+    for( size_t i = 0; i < normScript.size(); ++i )
+    {
+        if( normScript[i] == '\\' ) normScript[i] = '/';
+    }
+    while( !normScript.empty() && ( normScript[0] == '/' || normScript[0] == '.' ) )
+    {
+        normScript.erase( 0, 1 );
+    }
+
     ModPathHandlerRule rule;
-    rule.pattern = pattern;
-    rule.scriptPath = scriptPath;
+    rule.pattern = normPattern;
+    rule.scriptPath = normScript;
     m_rules.push_back( rule );
-    MOD_LOGI("[ModLoaderLua] Registered PathHandler: '%s' -> '%s'", pattern.c_str(), scriptPath.c_str());
+    MOD_LOGI("[ModLoaderLua] Registered PathHandler: '%s' -> '%s'", normPattern.c_str(), normScript.c_str());
 }
 
 void ModLoaderLua::ClearPathHandlers()
@@ -446,6 +466,10 @@ bool ModLoaderLua::InitLuaState()
     std::string cfLua = m_activeModPath + "/CustomFiles.lua";
     if( access( cfLua.c_str(), R_OK ) != 0 )
     {
+        cfLua = m_activeModPath + "/CustomFiles/CustomFiles.lua";
+    }
+    if( access( cfLua.c_str(), R_OK ) != 0 )
+    {
         cfLua = m_activeModPath + "/" + m_activeModName + "/CustomFiles.lua";
     }
 
@@ -476,7 +500,35 @@ void ModLoaderLua::Initialize( const char* modsDir, const char* activeMod, const
     if( activeMod != NULL ) m_activeModName = activeMod;
     if( gameDir != NULL ) m_gameDirPath = gameDir;
 
-    m_activeModPath = m_modsDir + "/" + m_activeModName;
+    // Check if modsDir already points to the effective mod folder
+    char testPath[1024];
+    snprintf( testPath, sizeof(testPath), "%s/CustomFiles", m_modsDir.c_str() );
+    char testMeta[1024];
+    snprintf( testMeta, sizeof(testMeta), "%s/Meta.ini", m_modsDir.c_str() );
+    char testLua[1024];
+    snprintf( testLua, sizeof(testLua), "%s/CustomFiles.lua", m_modsDir.c_str() );
+
+    if( access( testPath, F_OK ) == 0 || access( testMeta, F_OK ) == 0 || access( testLua, F_OK ) == 0 )
+    {
+        m_activeModPath = m_modsDir;
+    }
+    else if( !m_activeModName.empty() && strcasecmp( m_activeModName.c_str(), "None" ) != 0 )
+    {
+        if( m_modsDir.size() >= m_activeModName.size() &&
+            strcasecmp( m_modsDir.substr( m_modsDir.size() - m_activeModName.size() ).c_str(), m_activeModName.c_str() ) == 0 )
+        {
+            m_activeModPath = m_modsDir;
+        }
+        else
+        {
+            m_activeModPath = m_modsDir + "/" + m_activeModName;
+        }
+    }
+    else
+    {
+        m_activeModPath = m_modsDir;
+    }
+
     m_cacheDir = "/storage/emulated/0/Simpsons Hit and Run/files/.mod_cache";
     EnsureDirectoryExists( m_cacheDir );
 
@@ -489,11 +541,15 @@ void ModLoaderLua::Initialize( const char* modsDir, const char* activeMod, const
 std::string ModLoaderLua::ResolveGameDataPath( const std::string& path )
 {
     std::string clean = path;
-    if( clean.rfind( "/GameData/", 0 ) == 0 )
+    for( size_t i = 0; i < clean.size(); ++i )
     {
-        clean = clean.substr( 10 );
+        if( clean[i] == '\\' ) clean[i] = '/';
     }
-    else if( clean.rfind( "GameData/", 0 ) == 0 )
+    while( !clean.empty() && ( clean[0] == '/' || clean[0] == '.' ) )
+    {
+        clean.erase( 0, 1 );
+    }
+    if( clean.rfind( "GameData/", 0 ) == 0 )
     {
         clean = clean.substr( 9 );
     }

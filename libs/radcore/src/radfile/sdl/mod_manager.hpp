@@ -74,6 +74,7 @@ private:
     char m_baseModsDir[512];
     char m_lastError[512];
     bool m_scanned;
+    bool m_bootInitialized;
     ModPersistenceCallback m_persistenceCallback;
     ModLogCallback m_logCallback;
 };

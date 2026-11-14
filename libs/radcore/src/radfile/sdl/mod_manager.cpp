@@ -33,6 +33,7 @@ ModManager& ModManager::GetInstance()
 ModManager::ModManager()
 :   m_activeModIndex( 0 ),
     m_scanned( false ),
+    m_bootInitialized( false ),
     m_persistenceCallback( NULL ),
     m_logCallback( NULL )
 {
@@ -223,6 +224,11 @@ bool ModManager::SetActiveMod( const char* modName, ModProgressCallback pfnProgr
 
     if( modName == NULL || modName[0] == '\0' || strcasecmp( modName, "None" ) == 0 )
     {
+        if( m_activeModIndex == 0 && m_activeModName[0] == '\0' && pfnProgress == NULL )
+        {
+            return true;
+        }
+
         // Deactivate all mods (Vanilla mode)
         m_activeModIndex = 0;
         m_activeModName[0] = '\0';
@@ -265,6 +271,14 @@ bool ModManager::SetActiveMod( const char* modName, ModProgressCallback pfnProgr
     }
 
     ModEntry& selected = m_mods[matchIdx];
+
+    // If this mod is already active, effectively mounted, and no re-extraction was requested via progress callback
+    if( matchIdx == m_activeModIndex && m_activeModIndex > 0 &&
+        m_effectiveModDir[0] != '\0' && pfnProgress == NULL &&
+        access( m_effectiveModDir, R_OK ) == 0 )
+    {
+        return true;
+    }
 
     if( selected.isArchive )
     {
@@ -374,6 +388,12 @@ void ModManager::CycleMod( int direction )
 
 void ModManager::InitializeOnBoot( const char* baseModsDir, const char* activeModFromConfig )
 {
+    if( m_bootInitialized )
+    {
+        return;
+    }
+    m_bootInitialized = true;
+
     if( baseModsDir && baseModsDir[0] != '\0' )
     {
         strncpy( m_baseModsDir, baseModsDir, sizeof(m_baseModsDir) - 1 );

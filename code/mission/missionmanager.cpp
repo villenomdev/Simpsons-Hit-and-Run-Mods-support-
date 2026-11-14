@@ -522,6 +522,14 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
 
             if( GetLoadingManager()->IsLoading() || GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
             {
+                // As long as requests are in flight in LoadingManager, never time out
+                if( GetLoadingManager()->IsLoading() )
+                {
+                    s_missionLoadingWatchdog = 0;
+                    s_lastRequestsRemaining = GetLoadingManager()->GetNumCurrentRequests();
+                    break;
+                }
+
                 int curReq = GetLoadingManager()->GetNumCurrentRequests();
                 if( curReq != s_lastRequestsRemaining )
                 {
@@ -563,6 +571,14 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
 
             if( GetLoadingManager()->IsLoading() || GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
             {
+                // As long as requests are in flight in LoadingManager, never time out
+                if( GetLoadingManager()->IsLoading() )
+                {
+                    s_missionInitingWatchdog = 0;
+                    s_lastInitingRequestsRemaining = GetLoadingManager()->GetNumCurrentRequests();
+                    break;
+                }
+
                 int curReq = GetLoadingManager()->GetNumCurrentRequests();
                 if( curReq != s_lastInitingRequestsRemaining )
                 {

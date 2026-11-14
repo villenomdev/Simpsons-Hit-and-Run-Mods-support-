@@ -189,8 +189,11 @@ void LoadingGameplayContext::OnUpdate( unsigned int elapsedTime )
         {
             if( GetGameFlow()->GetNextContext() != CONTEXT_GAMEPLAY && GetGameFlow()->GetCurrentContext() != CONTEXT_GAMEPLAY )
             {
-                GameLog_Recordf("LoadingGameplayContext", "Failsafe: forced transition to CONTEXT_GAMEPLAY after %u ticks", m_loadingElapsedTicks);
-                GetGameFlow()->SetContext( CONTEXT_GAMEPLAY );
+                if( !GetLoadingManager()->IsLoading() )
+                {
+                    GameLog_Recordf("LoadingGameplayContext", "Failsafe: forced transition to CONTEXT_GAMEPLAY after %u ticks", m_loadingElapsedTicks);
+                    GetGameFlow()->SetContext( CONTEXT_GAMEPLAY );
+                }
             }
         }
     }

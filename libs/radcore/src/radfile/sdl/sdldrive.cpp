@@ -354,38 +354,10 @@ static void EnsureModIniLoaded()
     {
         return;
     }
+    s_ModIniParsed = true;
 
-    if( !s_PrimaryModFoldersScanned && s_ModsDirectory[0] != '\0' )
+    if( s_ActiveMod[0] != '\0' && strcasecmp( s_ActiveMod, "none" ) != 0 )
     {
-        s_DiscoveredModFoldersPrimary.clear();
-        DIR* dir = opendir( s_ModsDirectory );
-        if( dir != NULL )
-        {
-            struct dirent* ent;
-            while( ( ent = readdir( dir ) ) != NULL )
-            {
-                if( ent->d_name[0] == '.' ) continue;
-                char fullDir[1024];
-                snprintf( fullDir, sizeof(fullDir), "%s/%s", s_ModsDirectory, ent->d_name );
-                struct stat entSt;
-                if( stat( fullDir, &entSt ) == 0 && S_ISDIR( entSt.st_mode ) )
-                {
-                    if( strcasecmp( ent->d_name, "CustomFiles" ) != 0 && strcasecmp( ent->d_name, "AdditionalFiles" ) != 0 )
-                    {
-                        s_DiscoveredModFoldersPrimary.push_back( ent->d_name );
-                    }
-                }
-            }
-            closedir( dir );
-        }
-        s_PrimaryModFoldersScanned = true;
-    }
-
-    ModManager::GetInstance().InitializeOnBoot( s_ModsDirectory, s_ActiveMod );
-    if( ModManager::GetInstance().HasActiveMod() )
-    {
-        strncpy( s_ActiveMod, ModManager::GetInstance().GetActiveModName(), sizeof(s_ActiveMod) - 1 );
-        s_ActiveMod[ sizeof(s_ActiveMod) - 1 ] = '\0';
         const char* effDir = ModManager::GetInstance().GetEffectiveActiveModDir();
         if( effDir && effDir[0] != '\0' )
         {
@@ -393,53 +365,9 @@ static void EnsureModIniLoaded()
         }
         ScanModFolderForIni( s_ModsDirectory, s_ActiveMod );
     }
-
-    ScanModFolderForIni( s_ModsDirectory, NULL );
-
-    for( size_t i = 0; i < s_DiscoveredModFoldersPrimary.size(); ++i )
+    else
     {
-        ScanModFolderForIni( s_ModsDirectory, s_DiscoveredModFoldersPrimary[i].c_str() );
-    }
-
-    const char* legacyDir = "/storage/emulated/0/simpsons_mods";
-    if( strcmp( s_ModsDirectory, legacyDir ) != 0 )
-    {
-        if( !s_FallbackModFoldersScanned )
-        {
-            s_DiscoveredModFoldersFallback.clear();
-            DIR* dir = opendir( legacyDir );
-            if( dir != NULL )
-            {
-                struct dirent* ent;
-                while( ( ent = readdir( dir ) ) != NULL )
-                {
-                    if( ent->d_name[0] == '.' ) continue;
-                    char fullDir[1024];
-                    snprintf( fullDir, sizeof(fullDir), "%s/%s", legacyDir, ent->d_name );
-                    struct stat entSt;
-                    if( stat( fullDir, &entSt ) == 0 && S_ISDIR( entSt.st_mode ) )
-                    {
-                        if( strcasecmp( ent->d_name, "CustomFiles" ) != 0 && strcasecmp( ent->d_name, "AdditionalFiles" ) != 0 )
-                        {
-                            s_DiscoveredModFoldersFallback.push_back( ent->d_name );
-                        }
-                    }
-                }
-                closedir( dir );
-            }
-            s_FallbackModFoldersScanned = true;
-        }
-
-        ScanModFolderForIni( legacyDir, NULL );
-        for( size_t i = 0; i < s_DiscoveredModFoldersFallback.size(); ++i )
-        {
-            ScanModFolderForIni( legacyDir, s_DiscoveredModFoldersFallback[i].c_str() );
-        }
-    }
-
-    if( !s_ModPathRedirections.empty() || !s_ModOccludedPaths.empty() || ++s_ModIniScanAttempts >= 5 )
-    {
-        s_ModIniParsed = true;
+        ScanModFolderForIni( s_ModsDirectory, NULL );
     }
 }
 
@@ -502,6 +430,18 @@ static bool s_SafeFrontend = false;
 
 void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod, bool safeFrontend )
 {
+    const char* safeDir = ( modsDir != NULL ) ? modsDir : s_ModsDirectory;
+    const char* safeMod = ( activeMod != NULL ) ? activeMod : s_ActiveMod;
+
+    if( s_ModsEnabled == enabled &&
+        s_SafeFrontend == safeFrontend &&
+        strcmp( s_ModsDirectory, safeDir ) == 0 &&
+        strcmp( s_ActiveMod, safeMod ) == 0 &&
+        s_ModIniParsed )
+    {
+        return;
+    }
+
     s_ModsEnabled = enabled;
     s_SafeFrontend = safeFrontend;
     if( modsDir != NULL && modsDir[ 0 ] != '\0' )
@@ -521,7 +461,7 @@ void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* ac
     s_ModPathRedirections.clear();
     s_ModOccludedPaths.clear();
     ModLoaderLua::GetInstance().Reset();
-    if( s_ModsEnabled && s_ActiveMod[0] != '\0' && strcmp( s_ActiveMod, "none" ) != 0 )
+    if( s_ModsEnabled && s_ActiveMod[0] != '\0' && strcasecmp( s_ActiveMod, "none" ) != 0 )
     {
         const char* effDir = ModManager::GetInstance().GetEffectiveActiveModDir();
         const char* dirToUse = ( effDir && effDir[0] != '\0' ) ? effDir : s_ModsDirectory;
@@ -677,6 +617,10 @@ static bool SearchModInDirectory( const char* modsDir,
         {
             return true;
         }
+
+        // Single active mod rule: when an active mod is configured,
+        // do not bleed into other mod directories. Return false to allow fallback to vanilla assets.
+        return false;
     }
 
     // 2. Check root of mods_directory with CustomFiles

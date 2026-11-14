@@ -115,12 +115,15 @@ void AndroidConfigurationManager::Initialize()
     // Ensure external mods folder exists
     mkdir( m_modsPath, 0777 );
 
-    // Update radSdlDrive with mods settings
-    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod, m_safeFrontend );
-
     // Register ModManager callbacks for persistence and logging
     ModManager::GetInstance().SetPersistenceCallback( OnModPersistence );
     ModManager::GetInstance().SetLogCallback( OnModLog );
+
+    // Initialize ModManager on boot with discovered mods and saved active mod
+    ModManager::GetInstance().InitializeOnBoot( m_modsPath, m_activeMod );
+
+    // Update radSdlDrive with mods settings
+    radSdlDriveSetModsConfig( m_enableMods, m_modsPath, m_activeMod, m_safeFrontend );
 
     // Sync GameLog enabled state with saved configuration
     GameLog::SetEnabled( m_enableGamelog );
@@ -296,6 +299,10 @@ void AndroidConfigurationManager::SetModsPath( const char* path )
 void AndroidConfigurationManager::SetActiveMod( const char* modName )
 {
     if( modName == NULL )
+    {
+        return;
+    }
+    if( strcmp( m_activeMod, modName ) == 0 )
     {
         return;
     }

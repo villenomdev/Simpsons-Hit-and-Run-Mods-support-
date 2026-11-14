@@ -2185,15 +2185,17 @@ void VehicleCentral::SetupDriver(Vehicle* vehicle)
                     }
 
                     character = GetCharacterManager()->AddCharacter(CharacterManager::NPC, uniqueName, vehicle->GetDriverName(), "npd", "");
+                    if( character != NULL && character->GetController() != NULL )
+                    {
+                        static_cast<NPCController*>(character->GetController())->TransitToState(NPCController::NONE);
+                        character->SetTargetVehicle( vehicle );
+                        character->AddToWorldScene();
+                        character->GetStateManager()->SetState<CharacterAi::InCar>();
 
-                    static_cast<NPCController*>(character->GetController())->TransitToState(NPCController::NONE);
-                    character->SetTargetVehicle( vehicle );
-                    character->AddToWorldScene();
-                    character->GetStateManager()->SetState<CharacterAi::InCar>();
+                        vehicle->SetDriver(character);
 
-                    vehicle->SetDriver(character);
-
-                    character->SetRole(Character::ROLE_DRIVER);
+                        character->SetRole(Character::ROLE_DRIVER);
+                    }
                 }
             }
         }
