@@ -73,7 +73,14 @@ tFileFTT::~tFileFTT()
 //--------------------------------------------------------------------------
 bool tFileFTT::EndOfFile()
 {
-    OpenFile();
+    if( m_pIRadFile == NULL )
+    {
+        OpenFile();
+    }
+    if( m_pIRadFile == NULL || !m_pIRadFile->IsOpen() )
+    {
+        return true;
+    }
     return position >= fileSize;
 }
 
@@ -178,6 +185,15 @@ bool tFileFTT::GetData(void* buf, unsigned count, DataType type)
         OpenFile();
     }
 
+    if( m_pIRadFile == NULL || !m_pIRadFile->IsOpen() || fileSize <= 0 )
+    {
+        if( buf && count > 0 )
+        {
+            memset( buf, 0, count * type );
+        }
+        return false;
+    }
+
     int numBytes = count * type;
 
      // No data to read
@@ -188,7 +204,10 @@ bool tFileFTT::GetData(void* buf, unsigned count, DataType type)
 
      if(currentPos + numBytes <= currentSize)
      {
-         memcpy(buf, &currentBuffer[ currentPos ], numBytes);
+         if( currentBuffer != NULL )
+         {
+             memcpy(buf, &currentBuffer[ currentPos ], numBytes);
+         }
          currentPos += numBytes;
          position += numBytes;
      }
@@ -203,7 +222,24 @@ bool tFileFTT::GetData(void* buf, unsigned count, DataType type)
                  size = currentSize - currentPos;
              }
 
-             memcpy(output, &currentBuffer[ currentPos ], size);
+             if( size <= 0 )
+             {
+                 if( position >= fileSize || !m_pIRadFile->IsOpen() )
+                 {
+                     break;
+                 }
+                 FillBuffer();
+                 if( currentSize <= currentPos )
+                 {
+                     break;
+                 }
+                 continue;
+             }
+
+             if( currentBuffer != NULL )
+             {
+                 memcpy(output, &currentBuffer[ currentPos ], size);
+             }
              output += size;
              currentPos += size;
              position += size;
@@ -402,6 +438,11 @@ void tFileFTT::Decompress (const unsigned char* input, unsigned int inputsize,
 //--------------------------------------------------------------------------
 void tFileFTT::FillBuffer()
 {
+    if ( m_pIRadFile == NULL || !m_pIRadFile->IsOpen() || fileSize <= 0 )
+    {
+        return;
+    }
+
     if (compressed)
     {
         struct 
@@ -496,7 +537,15 @@ void tFileFTT::OpenFile( void )
         P3DASSERT(m_pIRadFile);
 
         WaitForCompletion( );
-        P3DASSERT( m_pIRadFile->IsOpen( ));
+        if ( m_pIRadFile == NULL || !m_pIRadFile->IsOpen() )
+        {
+            fileSize = 0;
+            currentSize = 0;
+            nextSize = 0;
+            bufferSize = 0;
+            currentBuffer = NULL;
+            return;
+        }
      
         fileSize = m_pIRadFile->GetSize( );
 

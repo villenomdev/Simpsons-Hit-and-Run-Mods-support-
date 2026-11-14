@@ -37,11 +37,11 @@ class Reward;
 
 struct PreviewObject
 {
-    char name[ 16 ];            // object name
-    char filename[ 64 ];        // object filename
+    char name[ 32 ];            // object name
+    char filename[ 128 ];       // object filename
 
-    char nameModel[ 16 ];       // model drawable name
-    char filenameModel[ 64 ];   // model filename
+    char nameModel[ 32 ];       // model drawable name
+    char filenameModel[ 128 ];  // model filename
 
     bool isUnlocked : 1;        // unlocked flag
     Reward* pReward;            // reference to reward object

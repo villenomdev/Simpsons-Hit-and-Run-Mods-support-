@@ -794,7 +794,7 @@ CGuiScreenPhoneBooth::On3DModelLoaded( const PreviewObject* previewObject )
     {
         // search for 2D image(s) in inventory
         //
-        char name[ 16 ];
+        char name[ 64 ];
 
         if( damageState == eDamaged )
         {
@@ -824,7 +824,8 @@ CGuiScreenPhoneBooth::On3DModelLoaded( const PreviewObject* previewObject )
         }
         else
         {
-            rAssertMsg( false, "*** Can't find 2D vehicle image!!" );
+            // If the vehicle's specific 2D sprite is missing, fallback cleanly to default silhouette
+            m_previewImage->SetRawSprite( NULL, true );
         }
     }
 }

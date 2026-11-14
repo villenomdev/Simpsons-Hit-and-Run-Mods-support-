@@ -195,6 +195,11 @@ tLoadStatus  tP3DFileHandler::Load(tFile* file, tEntityStore* store)
     tLoadStatus fileStatus = LOAD_OK;
 
     P3DASSERT(chunkFile->GetCurrentID() == Pure3D::DATA_FILE);
+    if( chunkFile->GetCurrentID() != Pure3D::DATA_FILE )
+    {
+        chunkFile->Release();
+        return LOAD_ERROR;
+    }
     while(chunkFile->ChunksRemaining())
     {
 

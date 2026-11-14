@@ -758,7 +758,7 @@ IGuiScreenRewards::Load3DModel( const PreviewObject* previewObject )
 
     if( m_ID == GUI_SCREEN_ID_PHONE_BOOTH )
     {
-        char filename[ 64 ];
+        char filename[ 160 ];
 
         // load normal 2D car image
         //

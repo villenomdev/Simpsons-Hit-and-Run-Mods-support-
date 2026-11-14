@@ -14,8 +14,16 @@ tChunkFile::tChunkFile(tFile* file) : stackTop(-1), realFile(NULL)
 {
     tRefCounted::Assign(realFile,file);
 
-    P3D_U32  fileChunk;
-    GetData(&fileChunk, 4);
+    if( realFile == NULL || realFile->EndOfFile() )
+    {
+        return;
+    }
+
+    P3D_U32  fileChunk = 0;
+    if( !GetData(&fileChunk, 4) )
+    {
+        return;
+    }
     
     switch(fileChunk)
     {
@@ -24,10 +32,10 @@ tChunkFile::tChunkFile(tFile* file) : stackTop(-1), realFile(NULL)
             // fallthrough
         case Pure3D::DATA_FILE_COMPRESSED :
             int fileSize;
-            GetData(&fileSize, 1, tFile::DWORD);
+            if( !GetData(&fileSize, 1, tFile::DWORD) ) return;
             realFile->SetUncompressedSize(fileSize);
             realFile->SetCompressed(true);
-            GetData(&fileChunk, 1, tFile::DWORD);
+            if( !GetData(&fileChunk, 1, tFile::DWORD) ) return;
             break;
         default :
             break;
@@ -42,7 +50,7 @@ tChunkFile::tChunkFile(tFile* file) : stackTop(-1), realFile(NULL)
             fileChunk = Pure3D::DATA_FILE;
             break;
         default :
-            break;
+            return;
     }
 
     BeginChunk(fileChunk);
@@ -55,14 +63,26 @@ tChunkFile::~tChunkFile()
 
 bool tChunkFile::ChunksRemaining(void)
 {
+    if( stackTop < 0 || stackTop >= CHUNK_STACK_SIZE )
+    {
+        return false;
+    }
     Chunk* chunk = &chunkStack[stackTop];
-    return (chunk->chunkLength > chunk->dataLength) && (realFile->GetPosition() < (chunk->startPosition + chunk->chunkLength));
+    return (chunk->chunkLength > chunk->dataLength) && (realFile != NULL) && (realFile->GetPosition() < (chunk->startPosition + chunk->chunkLength));
 }
 
 unsigned tChunkFile::BeginChunk(void)
 {
+    if( stackTop < 0 )
+    {
+        return 0;
+    }
     stackTop++;
-    P3DASSERT(stackTop < CHUNK_STACK_SIZE);
+    if( stackTop >= CHUNK_STACK_SIZE )
+    {
+        stackTop = CHUNK_STACK_SIZE - 1;
+        return 0;
+    }
 
     // advance to the start of the subchunks
     if(stackTop != 0)
@@ -99,19 +119,28 @@ unsigned tChunkFile::BeginChunk(unsigned chunkID)
 
 void tChunkFile::EndChunk(void)
 {
+    if( stackTop <= 0 )
+    {
+        stackTop = -1;
+        return;
+    }
     unsigned start = chunkStack[stackTop].startPosition;
     unsigned chLength = chunkStack[stackTop].chunkLength;
     unsigned dataLength = chunkStack[stackTop].dataLength;
 
-    P3DASSERT(stackTop > 0);
-    P3DASSERT(realFile->GetPosition() <=  start + chLength); 
-//   P3DASSERT(oldChunkFormat || (chLength == dataLength) || (realFile->GetPosition() == start+chLength));
-    realFile->Advance((start + chLength) - realFile->GetPosition());
+    if( realFile != NULL && (start + chLength) > realFile->GetPosition() )
+    {
+        realFile->Advance((start + chLength) - realFile->GetPosition());
+    }
     stackTop--;
 }
 
 unsigned tChunkFile::GetCurrentID(void)
 {
+    if( stackTop < 0 || stackTop >= CHUNK_STACK_SIZE )
+    {
+        return 0;
+    }
     return chunkStack[stackTop].id;
 }
 
