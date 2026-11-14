@@ -101,6 +101,7 @@ static void LogPathStatus(const char* label, const char* path)
 static bool s_ModsEnabled = true;
 static char s_ModsDirectory[512] = "/storage/emulated/0/Simpsons Hit and Run/mods";
 static char s_ActiveMod[256] = "";
+static char s_FallbackGameDir[512] = "";
 static std::vector<std::string> s_DiscoveredModFoldersPrimary;
 static std::vector<std::string> s_DiscoveredModFoldersFallback;
 static bool s_PrimaryModFoldersScanned = false;
@@ -494,7 +495,6 @@ bool radSdlDriveIsOccluded( const char* rawFileName )
     return false;
 }
 
-static char s_FallbackGameDir[512] = "";
 static bool s_SafeFrontend = false;
 
 void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* activeMod, bool safeFrontend )
