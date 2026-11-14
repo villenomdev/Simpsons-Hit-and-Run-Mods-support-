@@ -38,6 +38,7 @@ ModManager::ModManager()
 {
     m_activeModName[ 0 ] = '\0';
     m_effectiveModDir[ 0 ] = '\0';
+    m_lastError[ 0 ] = '\0';
     strncpy( m_baseModsDir, "/storage/emulated/0/Simpsons Hit and Run/mods", sizeof(m_baseModsDir) - 1 );
     m_baseModsDir[ sizeof(m_baseModsDir) - 1 ] = '\0';
 }
@@ -211,8 +212,10 @@ void ModManager::ScanAvailableMods()
           (unsigned int)m_mods.size() - 1, m_baseModsDir, m_activeModName[0] ? m_activeModName : "None" );
 }
 
-bool ModManager::SetActiveMod( const char* modName )
+bool ModManager::SetActiveMod( const char* modName, ModProgressCallback pfnProgress, void* userData )
 {
+    m_lastError[ 0 ] = '\0';
+
     if( !m_scanned )
     {
         ScanAvailableMods();
@@ -257,20 +260,11 @@ bool ModManager::SetActiveMod( const char* modName )
     if( matchIdx < 0 )
     {
         LOGE( "[ModManager] Mod '%s' not found in available mods list!\n", modName );
+        snprintf( m_lastError, sizeof(m_lastError), "Mod '%s' not found in available mods list.", modName );
         return false;
     }
 
     ModEntry& selected = m_mods[matchIdx];
-
-    // Single active mod enforcement: reset all others
-    for( size_t i = 0; i < m_mods.size(); ++i )
-    {
-        m_mods[i].isActive = ( (int)i == matchIdx );
-    }
-
-    m_activeModIndex = matchIdx;
-    strncpy( m_activeModName, selected.name.c_str(), sizeof(m_activeModName) - 1 );
-    m_activeModName[ sizeof(m_activeModName) - 1 ] = '\0';
 
     if( selected.isArchive )
     {
@@ -282,23 +276,56 @@ bool ModManager::SetActiveMod( const char* modName )
         {
             LOGI( "[ModManager] Unpacking mod archive '%s' to '%s'...\n", selected.fullPath.c_str(), cacheDir );
             NotifyLog( "Mods", "Unpacking mod archive '%s' to cache...", selected.name.c_str() );
-            if( !ModArchive::ExtractArchive( selected.fullPath.c_str(), cacheDir ) )
+            if( !ModArchive::ExtractArchive( selected.fullPath.c_str(), cacheDir, pfnProgress, userData ) )
             {
                 LOGE( "[ModManager] Failed to extract archive '%s'!\n", selected.fullPath.c_str() );
-                NotifyLog( "Mods", "ERROR: Failed to extract mod archive '%s'", selected.name.c_str() );
+                snprintf( m_lastError, sizeof(m_lastError), "Failed to unpack '%s'. Archive may be corrupt or storage is full.", selected.name.c_str() );
+                NotifyLog( "Mods", "ERROR: %s", m_lastError );
+                SetActiveMod( "None" );
                 return false;
             }
         }
+        else if( pfnProgress != NULL )
+        {
+            // Already up to date, signal 100%
+            pfnProgress( 1.0f, "Cached", userData );
+        }
 
         std::string effectiveRoot = ModArchive::FindEffectiveModRoot( cacheDir );
+        if( effectiveRoot.empty() || access( effectiveRoot.c_str(), R_OK ) != 0 )
+        {
+            LOGE( "[ModManager] Effective mod root '%s' is invalid or unreadable!\n", effectiveRoot.c_str() );
+            snprintf( m_lastError, sizeof(m_lastError), "Extracted files for '%s' are missing or unreadable.", selected.name.c_str() );
+            NotifyLog( "Mods", "ERROR: %s", m_lastError );
+            SetActiveMod( "None" );
+            return false;
+        }
         strncpy( m_effectiveModDir, effectiveRoot.c_str(), sizeof(m_effectiveModDir) - 1 );
         m_effectiveModDir[ sizeof(m_effectiveModDir) - 1 ] = '\0';
     }
     else
     {
+        if( access( selected.fullPath.c_str(), R_OK ) != 0 )
+        {
+            LOGE( "[ModManager] Mod directory '%s' cannot be read!\n", selected.fullPath.c_str() );
+            snprintf( m_lastError, sizeof(m_lastError), "Mod folder '%s' cannot be read.", selected.name.c_str() );
+            NotifyLog( "Mods", "ERROR: %s", m_lastError );
+            SetActiveMod( "None" );
+            return false;
+        }
         strncpy( m_effectiveModDir, selected.fullPath.c_str(), sizeof(m_effectiveModDir) - 1 );
         m_effectiveModDir[ sizeof(m_effectiveModDir) - 1 ] = '\0';
     }
+
+    // Single active mod enforcement: reset all others
+    for( size_t i = 0; i < m_mods.size(); ++i )
+    {
+        m_mods[i].isActive = ( (int)i == matchIdx );
+    }
+
+    m_activeModIndex = matchIdx;
+    strncpy( m_activeModName, selected.name.c_str(), sizeof(m_activeModName) - 1 );
+    m_activeModName[ sizeof(m_activeModName) - 1 ] = '\0';
 
     // Persist to configuration
     if( m_persistenceCallback != NULL )

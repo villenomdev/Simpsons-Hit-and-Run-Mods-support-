@@ -43,6 +43,7 @@ public:
 
     virtual void OnCheatEntered( eCheatID cheatID, bool isEnabled );
     virtual CGuiMenu* HasMenu() { return m_pMenu; }
+    virtual eFEHotspotType CheckCursorAgainstHotspots( float x, float y );
 
 protected:
     void InitIntro();
@@ -56,6 +57,10 @@ private:
     void EnterModsMenu();
     void ExitModsMenu();
     void UpdateModsMenuDisplay();
+    void ActivateSelectedMod();
+    void UpdateModProgress( float progress, const char* currentFile );
+    void ShowModError( const char* errorMessage );
+    static void OnModProgressCallback( float progress, const char* currentFile, void* userData );
 
     void ProgressiveModeTestBegin();
     void OnProgressiveModeTestEnd();
@@ -86,6 +91,9 @@ private:
     bool m_inModsMenu;
     int m_modsMenuSelection;
     int m_modsMenuTopIndex;
+    bool m_inModLoadingState;
+    bool m_inModErrorState;
+    unsigned int m_lastProgressRenderTime;
 
 };
 

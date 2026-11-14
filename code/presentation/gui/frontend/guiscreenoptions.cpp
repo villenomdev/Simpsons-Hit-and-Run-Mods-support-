@@ -22,6 +22,8 @@
 #include <presentation/gui/guimanager.h>
 #include <presentation/gui/guiscreenmessage.h>
 #include <presentation/gui/guiscreenprompt.h>
+#include <render/RenderManager/RenderManager.h>
+#include <radtime.hpp>
 
 #include <cheats/cheatinputsystem.h>
 #include <cheats/cheats.h>
@@ -82,7 +84,10 @@ CGuiScreenOptions::CGuiScreenOptions
     m_elapsedProgressiveModeTestTime( -1 ),
     m_inModsMenu( false ),
     m_modsMenuSelection( 0 ),
-    m_modsMenuTopIndex( 0 )
+    m_modsMenuTopIndex( 0 ),
+    m_inModLoadingState( false ),
+    m_inModErrorState( false ),
+    m_lastProgressRenderTime( 0 )
 {
 MEMTRACK_PUSH_GROUP( "CGUIScreenOptions" );
     // Retrieve the Scrooby drawing elements.
@@ -267,6 +272,64 @@ CGuiScreenOptions::~CGuiScreenOptions()
     GetCheatInputSystem()->UnregisterCallback( this );
 }
 
+//===========================================================================
+// CGuiScreenOptions::CheckCursorAgainstHotspots
+//===========================================================================
+eFEHotspotType CGuiScreenOptions::CheckCursorAgainstHotspots( float x, float y )
+{
+    if( m_inModsMenu )
+    {
+        if( m_inModLoadingState )
+        {
+            return HOTSPOT_NONE;
+        }
+
+        if( m_inModErrorState )
+        {
+            return HOTSPOT_BUTTON;
+        }
+
+        if( m_cheatsPage != NULL )
+        {
+            const int MAX_DISPLAYED_MODS = 14;
+            int modCount = ModManager::GetInstance().GetModCount();
+
+            for( int i = 0; i < MAX_DISPLAYED_MODS; i++ )
+            {
+                int modIndex = m_modsMenuTopIndex + i;
+                if( modIndex >= modCount ) break;
+
+                char name[32];
+                sprintf( name, "Cheat%d", i + 1 );
+                Scrooby::Text* pText = m_cheatsPage->GetText( name );
+                if( pText != NULL && pText->IsVisible() )
+                {
+                    if( pText->IsPointInBoundingRect( x, y ) )
+                    {
+                        if( m_modsMenuSelection != modIndex )
+                        {
+                            m_modsMenuSelection = modIndex;
+                            this->UpdateModsMenuDisplay();
+                        }
+                        return HOTSPOT_BUTTON;
+                    }
+                }
+            }
+
+            // Also check footer text (Cheat15) -> BACK / Exit
+            Scrooby::Text* footerText = m_cheatsPage->GetText( "Cheat15" );
+            if( footerText != NULL && footerText->IsVisible() && footerText->IsPointInBoundingRect( x, y ) )
+            {
+                return HOTSPOT_BUTTON;
+            }
+        }
+
+        return HOTSPOT_NONE;
+    }
+
+    return CGuiScreen::CheckCursorAgainstHotspots( x, y );
+}
+
 
 //===========================================================================
 // CGuiScreenOptions::HandleMessage
@@ -388,6 +451,25 @@ void CGuiScreenOptions::HandleMessage
     {
         if( m_inModsMenu )
         {
+            if( m_inModLoadingState )
+            {
+                return;
+            }
+
+            if( m_inModErrorState )
+            {
+                if( message == GUI_MSG_CONTROLLER_SELECT ||
+                    message == GUI_MSG_CONTROLLER_START ||
+                    message == GUI_MSG_CONTROLLER_BACK ||
+                    message == GUI_MSG_MENU_SELECTION_MADE )
+                {
+                    m_inModErrorState = false;
+                    this->UpdateModsMenuDisplay();
+                    GetEventManager()->TriggerEvent( EVENT_FE_MENU_BACK );
+                }
+                return;
+            }
+
             switch( message )
             {
                 case GUI_MSG_CONTROLLER_UP:
@@ -420,11 +502,41 @@ void CGuiScreenOptions::HandleMessage
                     }
                     return;
                 }
+                case GUI_MSG_CONTROLLER_LEFT:
+                {
+                    int count = ModManager::GetInstance().GetModCount();
+                    if( count > 0 )
+                    {
+                        m_modsMenuSelection -= 5;
+                        if( m_modsMenuSelection < 0 )
+                        {
+                            m_modsMenuSelection = 0;
+                        }
+                        this->UpdateModsMenuDisplay();
+                        GetEventManager()->TriggerEvent( EVENT_FE_MENU_UPORDOWN );
+                    }
+                    return;
+                }
+                case GUI_MSG_CONTROLLER_RIGHT:
+                {
+                    int count = ModManager::GetInstance().GetModCount();
+                    if( count > 0 )
+                    {
+                        m_modsMenuSelection += 5;
+                        if( m_modsMenuSelection >= count )
+                        {
+                            m_modsMenuSelection = count - 1;
+                        }
+                        this->UpdateModsMenuDisplay();
+                        GetEventManager()->TriggerEvent( EVENT_FE_MENU_UPORDOWN );
+                    }
+                    return;
+                }
+                case GUI_MSG_CONTROLLER_SELECT:
+                case GUI_MSG_CONTROLLER_START:
                 case GUI_MSG_MENU_SELECTION_MADE:
                 {
-                    ModManager::GetInstance().SetActiveMod( m_modsMenuSelection );
-                    this->UpdateModsMenuDisplay();
-                    GetEventManager()->TriggerEvent( EVENT_FE_MENU_SELECT );
+                    this->ActivateSelectedMod();
                     return;
                 }
                 case GUI_MSG_CONTROLLER_BACK:
@@ -787,6 +899,8 @@ CGuiScreenOptions::EnterModsMenu()
     int activeIdx = ModManager::GetInstance().GetActiveModIndex();
     m_modsMenuSelection = ( activeIdx >= 0 ) ? activeIdx : 0;
     m_modsMenuTopIndex = 0;
+    m_inModLoadingState = false;
+    m_inModErrorState = false;
 
     if( m_cheatsOverlay != NULL && m_cheatsPage != NULL )
     {
@@ -806,6 +920,8 @@ void
 CGuiScreenOptions::ExitModsMenu()
 {
     m_inModsMenu = false;
+    m_inModLoadingState = false;
+    m_inModErrorState = false;
     if( m_cheatsOverlay != NULL )
     {
         m_cheatsOverlay->SetVisible( false );
@@ -838,7 +954,10 @@ CGuiScreenOptions::UpdateModsMenuDisplay()
     if( headerText != NULL )
     {
         headerText->SetColour( tColour( 255, 200, 50 ) );
-        headerText->SetString( 0, "=== SELECT ACTIVE MOD (1 ACTIVE ONLY) ===" );
+        char headerBuf[64];
+        snprintf( headerBuf, sizeof(headerBuf), "=== SELECT ACTIVE MOD (%d/%d) ===",
+                  modCount > 0 ? (m_modsMenuSelection + 1) : 0, modCount );
+        headerText->SetString( 0, headerBuf );
     }
 
     for( int i = 0; i < MAX_DISPLAYED_MODS; i++ )
@@ -850,6 +969,8 @@ CGuiScreenOptions::UpdateModsMenuDisplay()
         {
             continue;
         }
+
+        pText->SetBoundingBoxSize( 580, 24 );
 
         int modIndex = m_modsMenuTopIndex + i;
         if( modIndex < modCount )
@@ -885,8 +1006,180 @@ CGuiScreenOptions::UpdateModsMenuDisplay()
     Scrooby::Text* footerText = m_cheatsPage->GetText( "Cheat15" );
     if( footerText != NULL )
     {
+        footerText->SetBoundingBoxSize( 580, 30 );
         footerText->SetColour( tColour( 180, 180, 180 ) );
         footerText->SetString( 0, "[SELECT] Activate   [BACK] Exit Menu" );
+    }
+}
+
+void
+CGuiScreenOptions::OnModProgressCallback( float progress, const char* currentFile, void* userData )
+{
+    CGuiScreenOptions* pThis = static_cast<CGuiScreenOptions*>( userData );
+    if( pThis != NULL )
+    {
+        unsigned int now = radTimeGetMilliseconds();
+        if( progress >= 1.0f || progress <= 0.01f || ( now - pThis->m_lastProgressRenderTime ) >= 33 )
+        {
+            pThis->m_lastProgressRenderTime = now;
+            pThis->UpdateModProgress( progress, currentFile );
+            GetGuiSystem()->Update( 16 );
+            GetRenderManager()->ContextUpdate( 16 );
+        }
+    }
+}
+
+void
+CGuiScreenOptions::UpdateModProgress( float progress, const char* currentFile )
+{
+    if( m_cheatsPage == NULL ) return;
+
+    int pct = (int)(progress * 100.0f);
+    if( pct < 0 ) pct = 0;
+    if( pct > 100 ) pct = 100;
+
+    const int BAR_WIDTH = 25;
+    int filled = (pct * BAR_WIDTH) / 100;
+    char bar[64];
+    bar[0] = '[';
+    for( int i = 0; i < BAR_WIDTH; i++ )
+    {
+        if( i < filled ) bar[i + 1] = '=';
+        else if( i == filled && pct < 100 ) bar[i + 1] = '>';
+        else bar[i + 1] = ' ';
+    }
+    bar[BAR_WIDTH + 1] = ']';
+    snprintf( bar + BAR_WIDTH + 2, sizeof(bar) - BAR_WIDTH - 2, " %3d%%", pct );
+
+    Scrooby::Text* t0 = m_cheatsPage->GetText( "Cheat0" );
+    if( t0 )
+    {
+        t0->SetColour( tColour( 255, 200, 50 ) );
+        t0->SetString( 0, "=== UNPACKING MOD ARCHIVE ===" );
+    }
+
+    const ModEntry* mod = ModManager::GetInstance().GetMod( m_modsMenuSelection );
+    Scrooby::Text* t1 = m_cheatsPage->GetText( "Cheat1" );
+    if( t1 )
+    {
+        t1->SetColour( tColour( 255, 255, 255 ) );
+        t1->SetString( 0, mod ? mod->displayName.c_str() : "Mod" );
+    }
+
+    Scrooby::Text* t2 = m_cheatsPage->GetText( "Cheat2" );
+    if( t2 )
+    {
+        t2->SetColour( tColour( 80, 220, 255 ) );
+        t2->SetString( 0, bar );
+    }
+
+    Scrooby::Text* t3 = m_cheatsPage->GetText( "Cheat3" );
+    if( t3 )
+    {
+        t3->SetColour( tColour( 255, 255, 120 ) );
+        char fileBuf[128];
+        const char* fn = currentFile ? currentFile : "";
+        if( strlen(fn) > 36 ) fn += (strlen(fn) - 36);
+        snprintf( fileBuf, sizeof(fileBuf), "File: %s", fn );
+        t3->SetString( 0, fileBuf );
+    }
+
+    for( int i = 4; i <= 14; i++ )
+    {
+        char name[32];
+        sprintf( name, "Cheat%d", i );
+        Scrooby::Text* t = m_cheatsPage->GetText( name );
+        if( t ) t->SetString( 0, " " );
+    }
+
+    Scrooby::Text* t15 = m_cheatsPage->GetText( "Cheat15" );
+    if( t15 )
+    {
+        t15->SetColour( tColour( 255, 120, 120 ) );
+        t15->SetString( 0, "Please wait... Do not exit the app." );
+    }
+}
+
+void
+CGuiScreenOptions::ShowModError( const char* errorMessage )
+{
+    m_inModLoadingState = false;
+    m_inModErrorState = true;
+
+    if( m_cheatsPage == NULL ) return;
+
+    Scrooby::Text* t0 = m_cheatsPage->GetText( "Cheat0" );
+    if( t0 )
+    {
+        t0->SetColour( tColour( 255, 50, 50 ) );
+        t0->SetString( 0, "=== MOD ERROR ===" );
+    }
+
+    Scrooby::Text* t1 = m_cheatsPage->GetText( "Cheat1" );
+    if( t1 )
+    {
+        t1->SetColour( tColour( 255, 100, 100 ) );
+        t1->SetString( 0, "Failed to load mod. Reverted to Vanilla." );
+    }
+
+    Scrooby::Text* t2 = m_cheatsPage->GetText( "Cheat2" );
+    if( t2 )
+    {
+        t2->SetColour( tColour( 255, 220, 220 ) );
+        t2->SetString( 0, errorMessage ? errorMessage : "Unknown error occurred." );
+    }
+
+    for( int i = 3; i <= 14; i++ )
+    {
+        char name[32];
+        sprintf( name, "Cheat%d", i );
+        Scrooby::Text* t = m_cheatsPage->GetText( name );
+        if( t ) t->SetString( 0, " " );
+    }
+
+    Scrooby::Text* t15 = m_cheatsPage->GetText( "Cheat15" );
+    if( t15 )
+    {
+        t15->SetColour( tColour( 255, 255, 0 ) );
+        t15->SetString( 0, "[Press SELECT or BACK to continue]" );
+    }
+
+    GetEventManager()->TriggerEvent( EVENT_FE_CHEAT_FAILURE );
+}
+
+void
+CGuiScreenOptions::ActivateSelectedMod()
+{
+    int count = ModManager::GetInstance().GetModCount();
+    if( m_modsMenuSelection < 0 || m_modsMenuSelection >= count ) return;
+
+    const ModEntry* mod = ModManager::GetInstance().GetMod( m_modsMenuSelection );
+    bool isArchive = ( mod != NULL && mod->isArchive );
+
+    m_inModLoadingState = true;
+    m_inModErrorState = false;
+    m_lastProgressRenderTime = 0;
+
+    if( isArchive )
+    {
+        this->UpdateModProgress( 0.0f, "Starting extraction..." );
+        GetGuiSystem()->Update( 16 );
+        GetRenderManager()->ContextUpdate( 16 );
+    }
+
+    bool success = ModManager::GetInstance().SetActiveMod( m_modsMenuSelection, isArchive ? OnModProgressCallback : NULL, this );
+
+    m_inModLoadingState = false;
+
+    if( !success )
+    {
+        const char* err = ModManager::GetInstance().GetLastError();
+        this->ShowModError( ( err != NULL && err[0] != '\0' ) ? err : "Failed to activate mod." );
+    }
+    else
+    {
+        this->UpdateModsMenuDisplay();
+        GetEventManager()->TriggerEvent( EVENT_FE_MENU_SELECT );
     }
 }
 

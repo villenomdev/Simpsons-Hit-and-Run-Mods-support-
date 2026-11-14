@@ -131,7 +131,7 @@ static void WriteExtractionStamp( const char* archivePath, const char* targetDir
 // ---------------------------------------------------------------------------
 // LSPA Extraction Implementation
 // ---------------------------------------------------------------------------
-static bool ExtractLSPAInternal( const char* archivePath, const char* targetDir )
+static bool ExtractLSPAInternal( const char* archivePath, const char* targetDir, ArchiveProgressCallback pfnProgress, void* userData )
 {
     FILE* f = fopen( archivePath, "rb" );
     if( !f )
@@ -179,6 +179,8 @@ static bool ExtractLSPAInternal( const char* archivePath, const char* targetDir 
         const char* baseDir;
         bool isTimestamped;
         uint32_t curBlock;
+        ArchiveProgressCallback pfnProgress;
+        void* userData;
 
         bool ExtractNode( const std::string& parentPath )
         {
@@ -256,6 +258,13 @@ static bool ExtractLSPAInternal( const char* archivePath, const char* targetDir 
                     return false;
                 }
 
+                if( pfnProgress != NULL && totalLength > 0 )
+                {
+                    float prog = (float)offset / (float)totalLength;
+                    if( prog > 1.0f ) prog = 1.0f;
+                    pfnProgress( prog, fullRelPath.c_str(), userData );
+                }
+
                 if( fileSize > 0 )
                 {
                     if( fseek( fileHandle, offset, SEEK_SET ) == 0 )
@@ -289,6 +298,8 @@ static bool ExtractLSPAInternal( const char* archivePath, const char* targetDir 
     state.baseDir = targetDir;
     state.isTimestamped = timestamped;
     state.curBlock = currentBlock;
+    state.pfnProgress = pfnProgress;
+    state.userData = userData;
 
     EnsureDirectoryRecursive( targetDir );
 
@@ -303,6 +314,10 @@ static bool ExtractLSPAInternal( const char* archivePath, const char* targetDir 
     }
 
     fclose( f );
+    if( pfnProgress != NULL )
+    {
+        pfnProgress( 1.0f, "Completed", userData );
+    }
     LOGI( "[ModArchive] Successfully extracted LSPA archive '%s' to '%s'\n", archivePath, targetDir );
     return true;
 }
@@ -310,7 +325,7 @@ static bool ExtractLSPAInternal( const char* archivePath, const char* targetDir 
 // ---------------------------------------------------------------------------
 // ZIP Extraction Implementation
 // ---------------------------------------------------------------------------
-static bool ExtractZipInternal( const char* archivePath, const char* targetDir )
+static bool ExtractZipInternal( const char* archivePath, const char* targetDir, ArchiveProgressCallback pfnProgress, void* userData )
 {
     mz_zip_archive zip;
     memset( &zip, 0, sizeof(zip) );
@@ -333,6 +348,12 @@ static bool ExtractZipInternal( const char* archivePath, const char* targetDir )
             continue;
         }
 
+        if( pfnProgress != NULL && numFiles > 0 )
+        {
+            float prog = (float)i / (float)numFiles;
+            pfnProgress( prog, file_stat.m_filename, userData );
+        }
+
         char outFilePath[1024];
         snprintf( outFilePath, sizeof(outFilePath), "%s/%s", targetDir, file_stat.m_filename );
 
@@ -351,22 +372,26 @@ static bool ExtractZipInternal( const char* archivePath, const char* targetDir )
     }
 
     mz_zip_reader_end( &zip );
+    if( pfnProgress != NULL )
+    {
+        pfnProgress( 1.0f, "Completed", userData );
+    }
     LOGI( "[ModArchive] Successfully extracted ZIP archive '%s' to '%s'\n", archivePath, targetDir );
     return true;
 }
 
-bool ExtractArchive( const char* archivePath, const char* targetDir )
+bool ExtractArchive( const char* archivePath, const char* targetDir, ArchiveProgressCallback pfnProgress, void* userData )
 {
     if( archivePath == NULL || targetDir == NULL ) return false;
 
     bool success = false;
     if( IsLSPArchive( archivePath ) )
     {
-        success = ExtractLSPAInternal( archivePath, targetDir );
+        success = ExtractLSPAInternal( archivePath, targetDir, pfnProgress, userData );
     }
     else if( IsZipArchive( archivePath ) )
     {
-        success = ExtractZipInternal( archivePath, targetDir );
+        success = ExtractZipInternal( archivePath, targetDir, pfnProgress, userData );
     }
     else
     {

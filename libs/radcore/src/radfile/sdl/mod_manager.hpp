@@ -19,6 +19,7 @@ struct ModEntry
 
 typedef void (*ModPersistenceCallback)( const char* modName );
 typedef void (*ModLogCallback)( const char* category, const char* message );
+typedef void (*ModProgressCallback)( float progress, const char* currentFile, void* userData );
 
 class ModManager
 {
@@ -41,13 +42,14 @@ public:
     const char* GetActiveModName() const { return m_activeModName; }
     const char* GetEffectiveActiveModDir() const { return m_effectiveModDir; }
     bool HasActiveMod() const { return m_activeModIndex > 0 && m_activeModName[0] != '\0' && strcasecmp(m_activeModName, "None") != 0; }
+    const char* GetLastError() const { return m_lastError; }
 
     // Activates a mod by name (e.g. "Some Law Enforcement", or "" / "None" for Vanilla).
     // Deactivates any previous mod.
     // If it is an archive (.lmlm or .zip), extracts to .mod_cache/<name> if needed.
     // Persists to config.ini immediately and reinitializes Lucas Mod Loader Lua.
-    bool SetActiveMod( const char* modName );
-    bool SetActiveMod( int index ) { if ( index >= 0 && index < (int)m_mods.size() ) return SetActiveMod( m_mods[index].name.c_str() ); return false; }
+    bool SetActiveMod( const char* modName, ModProgressCallback pfnProgress = NULL, void* userData = NULL );
+    bool SetActiveMod( int index, ModProgressCallback pfnProgress = NULL, void* userData = NULL ) { if ( index >= 0 && index < (int)m_mods.size() ) return SetActiveMod( m_mods[index].name.c_str(), pfnProgress, userData ); return false; }
 
     // Cycle to previous / next mod (-1 or +1)
     void CycleMod( int direction );
@@ -70,6 +72,7 @@ private:
     char m_activeModName[256];
     char m_effectiveModDir[1024];
     char m_baseModsDir[512];
+    char m_lastError[512];
     bool m_scanned;
     ModPersistenceCallback m_persistenceCallback;
     ModLogCallback m_logCallback;

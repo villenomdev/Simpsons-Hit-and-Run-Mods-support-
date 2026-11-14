@@ -19,8 +19,10 @@ namespace ModArchive
     // Check if cache directory contains a valid stamp matching current archive size and mtime
     bool IsExtractionUpToDate( const char* archivePath, const char* targetDir );
 
-    // Extract LSPA or ZIP archive to targetDir
-    bool ExtractArchive( const char* archivePath, const char* targetDir );
+    typedef void (*ArchiveProgressCallback)( float progress, const char* currentFile, void* userData );
+
+    // Extract LSPA or ZIP archive to targetDir (with optional progress callback)
+    bool ExtractArchive( const char* archivePath, const char* targetDir, ArchiveProgressCallback pfnProgress = NULL, void* userData = NULL );
 
     // Given targetDir, determine the effective root folder where Meta.ini or CustomFiles lives.
     // If the archive had a single wrapper directory, returns targetDir/WrapperDir, else targetDir.
