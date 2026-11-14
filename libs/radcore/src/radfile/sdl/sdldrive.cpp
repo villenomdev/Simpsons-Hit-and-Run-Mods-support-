@@ -81,6 +81,10 @@
         }
     }
     #define LOGI(...) SdlDriveLog(__VA_ARGS__)
+    #define LOGE(...) SdlDriveLog(__VA_ARGS__)
+#else
+    #define LOGI(...) ((void)0)
+    #define LOGE(...) ((void)0)
 #endif
 
 #ifdef RAD_ANDROID
