@@ -116,6 +116,7 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenOptions" );
     if( gamelogText != NULL )
     {
         Scrooby::Text* creditsText = pGroup->GetText( "ViewCredits" );
+        Scrooby::Text* moviesText = pGroup->GetText( "ViewMovies" );
         if( creditsText != NULL )
         {
             int cWidth = 0, cHeight = 0;
@@ -123,20 +124,27 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenOptions" );
             int cCenterX = 0, cCenterY = 0;
             creditsText->GetBoundingBoxCenter( cCenterX, cCenterY );
 
-            int gWidth = 0, gHeight = 0;
-            gamelogText->GetBoundingBoxSize( gWidth, gHeight );
-            int gCenterX = 0, gCenterY = 0;
-            gamelogText->GetBoundingBoxCenter( gCenterX, gCenterY );
+            int spacingY = -38;
+            if( moviesText != NULL )
+            {
+                int mCenterX = 0, mCenterY = 0;
+                moviesText->GetBoundingBoxCenter( mCenterX, mCenterY );
+                int diff = cCenterY - mCenterY;
+                if( diff < -15 && diff > -75 )
+                {
+                    spacingY = diff;
+                }
+            }
 
-            int targetWidth = ( cWidth > gWidth ) ? cWidth : gWidth;
-            if( targetWidth < 300 ) targetWidth = 300;
-            int targetHeight = ( cHeight > gHeight ) ? cHeight : gHeight;
-            if( targetHeight < 30 ) targetHeight = 30;
+            int targetWidth = ( cWidth > 320 ) ? cWidth : 320;
+            int targetHeight = ( cHeight > 32 ) ? cHeight : 32;
 
             gamelogText->SetBoundingBoxSize( targetWidth, targetHeight );
             gamelogText->SetHorizontalJustification( creditsText->GetHorizontalJustification() );
             gamelogText->SetVerticalJustification( creditsText->GetVerticalJustification() );
-            gamelogText->SetPositionOfCenter( cCenterX, gCenterY );
+            gamelogText->SetPositionOfCenter( cCenterX, cCenterY + spacingY );
+            gamelogText->SetColour( creditsText->GetColour() );
+            gamelogText->SetAlpha( 1.0f );
         }
 
         gamelogText->SetString( 0, GameLog::IsEnabled() ? "Gamelog (On)" : "Gamelog (Off)" );
@@ -168,8 +176,9 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenOptions" );
 #endif
 
 #ifndef RAD_PC
-    // Keep 5 items centered with default Scrooby layout
+    // Center the 5 visible menu items (Controller, Sound, ViewMovies, ViewCredits, Gamelog)
     pGroup->ResetTransformation();
+    pGroup->Translate( 0, 18 );
 #endif
 
     // get cheats page, if included
@@ -557,9 +566,38 @@ CGuiScreenOptions::UpdateGamelogDisplay()
         if( pGroup != NULL )
         {
             Scrooby::Text* gamelogText = pGroup->GetText( "DisplayMode" );
-            if( gamelogText != NULL )
+            Scrooby::Text* creditsText = pGroup->GetText( "ViewCredits" );
+            Scrooby::Text* moviesText = pGroup->GetText( "ViewMovies" );
+            if( gamelogText != NULL && creditsText != NULL )
             {
+                int cWidth = 0, cHeight = 0;
+                creditsText->GetBoundingBoxSize( cWidth, cHeight );
+                int cCenterX = 0, cCenterY = 0;
+                creditsText->GetBoundingBoxCenter( cCenterX, cCenterY );
+
+                int spacingY = -38;
+                if( moviesText != NULL )
+                {
+                    int mCenterX = 0, mCenterY = 0;
+                    moviesText->GetBoundingBoxCenter( mCenterX, mCenterY );
+                    int diff = cCenterY - mCenterY;
+                    if( diff < -15 && diff > -75 )
+                    {
+                        spacingY = diff;
+                    }
+                }
+
+                int targetWidth = ( cWidth > 320 ) ? cWidth : 320;
+                int targetHeight = ( cHeight > 32 ) ? cHeight : 32;
+
+                gamelogText->SetBoundingBoxSize( targetWidth, targetHeight );
+                gamelogText->SetHorizontalJustification( creditsText->GetHorizontalJustification() );
+                gamelogText->SetVerticalJustification( creditsText->GetVerticalJustification() );
+                gamelogText->SetPositionOfCenter( cCenterX, cCenterY + spacingY );
+                gamelogText->SetColour( creditsText->GetColour() );
+                gamelogText->SetAlpha( 1.0f );
                 gamelogText->SetString( 0, GameLog::IsEnabled() ? "Gamelog (On)" : "Gamelog (Off)" );
+                gamelogText->SetVisible( true );
             }
         }
     }

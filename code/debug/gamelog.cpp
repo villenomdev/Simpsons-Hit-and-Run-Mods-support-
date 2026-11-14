@@ -6,72 +6,182 @@
 //
 // Subsystem:   Debug Services / Execution Logging
 //
-// Description: Implementation of the centralized execution logger for the game.
+// Description: Centralized in-memory and on-disk execution logger for the game.
+//              Records game operation logs and outputs gamelog.txt when enabled
+//              from Options -> Gamelog.
 //
 //=============================================================================
 
-#include <debug/gamelog.h>
+#include "gamelog.h"
 
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <cstdarg>
-#include <ctime>
-#include <string>
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <time.h>
 #include <vector>
+#include <string>
 #include <mutex>
-#include <sys/stat.h>
+#include <signal.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #if defined(RAD_ANDROID)
     #include <android/log.h>
     #include <SDL.h>
-#elif defined(RAD_WIN32)
-    #include <SDL.h>
+    #include <jni.h>
 #endif
 
 namespace
 {
-    static bool s_enabled = false;
-    static bool s_initialized = false;
-    static bool s_hasSaved = false;
-    static std::mutex s_mutex;
-    static std::vector<std::string> s_entries;
-    static const size_t MAX_LOG_ENTRIES = 60000;
-    static char s_savedPath[ 512 ] = { 0 };
-    static time_t s_startTime = 0;
+    const size_t MAX_LOG_ENTRIES = 60000;
 
-    void FormatTimestamp( char* outBuffer, size_t bufferSize )
+    std::mutex s_mutex;
+    bool s_initialized = false;
+    bool s_enabled = false;
+    time_t s_startTime = 0;
+    std::vector<std::string> s_entries;
+    std::vector<FILE*> s_openFiles;
+    char s_savedPath[ 512 ] = { 0 };
+
+    void EnsureDirectoryExists( const std::string& path )
     {
-        time_t rawtime;
-        time( &rawtime );
-        struct tm* timeinfo = localtime( &rawtime );
-
-        if( timeinfo != NULL )
+        if( path.empty() || path == "." ) return;
+        char temp[ 512 ];
+        strncpy( temp, path.c_str(), sizeof( temp ) - 1 );
+        temp[ sizeof( temp ) - 1 ] = '\0';
+        for( char* p = temp + 1; *p != '\0'; p++ )
         {
-            strftime( outBuffer, bufferSize, "%H:%M:%S", timeinfo );
+            if( *p == '/' )
+            {
+                *p = '\0';
+                mkdir( temp, 0777 );
+                *p = '/';
+            }
+        }
+        mkdir( temp, 0777 );
+    }
+
+    void FormatTimestamp( char* buffer, size_t bufferSize )
+    {
+        time_t rawTime;
+        time( &rawTime );
+        struct tm* timeInfo = localtime( &rawTime );
+        if( timeInfo != NULL )
+        {
+            strftime( buffer, bufferSize, "%H:%M:%S", timeInfo );
         }
         else
         {
-            snprintf( outBuffer, bufferSize, "00:00:00" );
+            snprintf( buffer, bufferSize, "00:00:00" );
         }
+    }
+
+    void CloseOpenFilesInternal()
+    {
+        for( size_t i = 0; i < s_openFiles.size(); i++ )
+        {
+            if( s_openFiles[ i ] != NULL )
+            {
+                fflush( s_openFiles[ i ] );
+                fsync( fileno( s_openFiles[ i ] ) );
+                fclose( s_openFiles[ i ] );
+            }
+        }
+        s_openFiles.clear();
+    }
+
+    void OpenLogFilesInternal()
+    {
+        CloseOpenFilesInternal();
+
+        std::vector<std::string> targetDirs;
+
+#if defined(RAD_ANDROID)
+        targetDirs.push_back( "/storage/emulated/0/Simpsons and Run" );
+        targetDirs.push_back( "/storage/emulated/0/Simpsons Hit and Run" );
+        targetDirs.push_back( "/storage/emulated/0/Simpsons and Run/files" );
+        targetDirs.push_back( "/storage/emulated/0/Simpsons Hit and Run/files" );
+        targetDirs.push_back( "/sdcard/Simpsons and Run" );
+        targetDirs.push_back( "/sdcard/Simpsons Hit and Run" );
+
+        const char* extBase = SDL_AndroidGetExternalStoragePath();
+        if( extBase != NULL && extBase[ 0 ] != '\0' )
+        {
+            targetDirs.push_back( extBase );
+        }
+
+        const char* intBase = SDL_AndroidGetInternalStoragePath();
+        if( intBase != NULL && intBase[ 0 ] != '\0' )
+        {
+            targetDirs.push_back( intBase );
+        }
+#endif
+        targetDirs.push_back( "." );
+
+        char startStr[ 64 ] = "N/A";
+        struct tm* startInfo = localtime( &s_startTime );
+        if( startInfo != NULL )
+        {
+            strftime( startStr, sizeof( startStr ), "%Y-%m-%d %H:%M:%S", startInfo );
+        }
+
+        for( size_t i = 0; i < targetDirs.size(); i++ )
+        {
+            EnsureDirectoryExists( targetDirs[ i ] );
+            std::string filePath = targetDirs[ i ] + "/gamelog.txt";
+
+            FILE* fp = fopen( filePath.c_str(), "w" );
+            if( fp != NULL )
+            {
+                fprintf( fp, "================================================================================\n" );
+                fprintf( fp, "The Simpsons: Hit & Run - Android Game Log\n" );
+                fprintf( fp, "Target file:     %s\n", filePath.c_str() );
+                fprintf( fp, "Session started: %s\n", startStr );
+                fprintf( fp, "================================================================================\n\n" );
+
+                // Dump all prior entries
+                for( size_t j = 0; j < s_entries.size(); j++ )
+                {
+                    fputs( s_entries[ j ].c_str(), fp );
+                    fputc( '\n', fp );
+                }
+
+                fflush( fp );
+                fsync( fileno( fp ) );
+
+                s_openFiles.push_back( fp );
+
+                if( s_savedPath[ 0 ] == '\0' )
+                {
+                    strncpy( s_savedPath, filePath.c_str(), sizeof( s_savedPath ) - 1 );
+                }
+
+#if defined(RAD_ANDROID)
+                __android_log_print( ANDROID_LOG_INFO, "SimpsonsHitAndRun",
+                                     "[GameLog] Active log stream opened at: '%s'", filePath.c_str() );
+#endif
+            }
+        }
+    }
+
+    void SignalHandler( int /*sig*/ )
+    {
+        GameLog::Shutdown();
+        _exit( 0 );
     }
 }
 
 void GameLog::Initialize()
 {
     std::lock_guard<std::mutex> lock( s_mutex );
+
     if( s_initialized )
     {
         return;
     }
 
-    s_enabled = false; // Off by default as required
-    s_hasSaved = false;
-    s_savedPath[ 0 ] = '\0';
     time( &s_startTime );
-
-    s_entries.reserve( 2048 );
+    s_entries.reserve( 1024 );
 
     char timeStr[ 64 ];
     FormatTimestamp( timeStr, sizeof( timeStr ) );
@@ -82,12 +192,45 @@ void GameLog::Initialize()
 
     s_initialized = true;
 
+    struct sigaction sa;
+    memset( &sa, 0, sizeof( sa ) );
+    sa.sa_handler = &SignalHandler;
+    sigaction( SIGTERM, &sa, NULL );
+    sigaction( SIGINT, &sa, NULL );
+    sigaction( SIGHUP, &sa, NULL );
+
     atexit( &GameLog::Shutdown );
 }
 
 void GameLog::Shutdown()
 {
-    SaveToFile();
+    std::lock_guard<std::mutex> lock( s_mutex );
+    if( !s_enabled )
+    {
+        return;
+    }
+
+    char timeStr[ 64 ];
+    FormatTimestamp( timeStr, sizeof( timeStr ) );
+
+    for( size_t i = 0; i < s_openFiles.size(); i++ )
+    {
+        if( s_openFiles[ i ] != NULL )
+        {
+            fprintf( s_openFiles[ i ], "\n================================================================================\n" );
+            fprintf( s_openFiles[ i ], "End of Game Log (Shutdown at %s, total entries: %zu)\n", timeStr, s_entries.size() );
+            fprintf( s_openFiles[ i ], "================================================================================\n" );
+            fflush( s_openFiles[ i ] );
+            fsync( fileno( s_openFiles[ i ] ) );
+            fclose( s_openFiles[ i ] );
+        }
+    }
+    s_openFiles.clear();
+
+#if defined(RAD_ANDROID)
+    __android_log_print( ANDROID_LOG_INFO, "SimpsonsHitAndRun",
+                         "[GameLog] Closed and synced gamelog.txt files on exit." );
+#endif
 }
 
 bool GameLog::IsEnabled()
@@ -112,6 +255,15 @@ void GameLog::SetEnabled( bool enable )
 #if defined(RAD_ANDROID)
     __android_log_print( ANDROID_LOG_INFO, "SimpsonsHitAndRun", "%s", statusMsg );
 #endif
+
+    if( s_enabled )
+    {
+        OpenLogFilesInternal();
+    }
+    else
+    {
+        CloseOpenFilesInternal();
+    }
 }
 
 bool GameLog::Toggle()
@@ -130,6 +282,15 @@ bool GameLog::Toggle()
 #if defined(RAD_ANDROID)
     __android_log_print( ANDROID_LOG_INFO, "SimpsonsHitAndRun", "%s", statusMsg );
 #endif
+
+    if( s_enabled )
+    {
+        OpenLogFilesInternal();
+    }
+    else
+    {
+        CloseOpenFilesInternal();
+    }
 
     return s_enabled;
 }
@@ -185,6 +346,24 @@ void GameLog::LogTagged( const char* tag, const char* message )
     }
 
     s_entries.push_back( line );
+
+    if( s_enabled )
+    {
+        if( s_openFiles.empty() )
+        {
+            OpenLogFilesInternal();
+        }
+
+        for( size_t i = 0; i < s_openFiles.size(); i++ )
+        {
+            if( s_openFiles[ i ] != NULL )
+            {
+                fputs( line.c_str(), s_openFiles[ i ] );
+                fputc( '\n', s_openFiles[ i ] );
+                fflush( s_openFiles[ i ] );
+            }
+        }
+    }
 }
 
 void GameLog::Logf( const char* tag, const char* fmt, ... )
@@ -203,12 +382,35 @@ void GameLog::Logf( const char* tag, const char* fmt, ... )
     LogTagged( tag, buffer );
 }
 
+void GameLog::SaveToFile()
+{
+    Flush();
+}
+
 void GameLog::Flush()
 {
-    // Save current buffer if enabled
-    if( IsEnabled() )
+    std::lock_guard<std::mutex> lock( s_mutex );
+    if( !s_enabled )
     {
-        SaveToFile();
+        return;
+    }
+
+    if( s_openFiles.empty() )
+    {
+        OpenLogFilesInternal();
+    }
+
+    char timeStr[ 64 ];
+    FormatTimestamp( timeStr, sizeof( timeStr ) );
+
+    for( size_t i = 0; i < s_openFiles.size(); i++ )
+    {
+        if( s_openFiles[ i ] != NULL )
+        {
+            fprintf( s_openFiles[ i ], "[%s] [GameLog] -- Log buffer synced to disk --\n", timeStr );
+            fflush( s_openFiles[ i ] );
+            fsync( fileno( s_openFiles[ i ] ) );
+        }
     }
 }
 
@@ -216,136 +418,6 @@ const char* GameLog::GetSavedPath()
 {
     std::lock_guard<std::mutex> lock( s_mutex );
     return s_savedPath;
-}
-
-void GameLog::SaveToFile()
-{
-    std::lock_guard<std::mutex> lock( s_mutex );
-
-    if( !s_enabled )
-    {
-        return;
-    }
-
-    if( s_hasSaved )
-    {
-        return;
-    }
-
-    std::vector<std::string> targetPaths;
-
-#if defined(RAD_ANDROID)
-    targetPaths.push_back( "/storage/emulated/0/Simpsons Hit and Run/gamelog.txt" );
-    targetPaths.push_back( "/storage/emulated/0/Simpsons Hit and Run/files/gamelog.txt" );
-
-    const char* extBase = SDL_AndroidGetExternalStoragePath();
-    if( extBase != NULL && extBase[ 0 ] != '\0' )
-    {
-        char p[ 512 ];
-        snprintf( p, sizeof( p ), "%s/gamelog.txt", extBase );
-        targetPaths.push_back( p );
-    }
-
-    const char* intBase = SDL_AndroidGetInternalStoragePath();
-    if( intBase != NULL && intBase[ 0 ] != '\0' )
-    {
-        char p[ 512 ];
-        snprintf( p, sizeof( p ), "%s/gamelog.txt", intBase );
-        targetPaths.push_back( p );
-    }
-#endif
-
-    targetPaths.push_back( "gamelog.txt" );
-
-    FILE* fp = NULL;
-    std::string chosenPath;
-
-    for( size_t i = 0; i < targetPaths.size(); i++ )
-    {
-        fp = fopen( targetPaths[ i ].c_str(), "w" );
-        if( fp != NULL )
-        {
-            chosenPath = targetPaths[ i ];
-            break;
-        }
-    }
-
-    if( fp == NULL )
-    {
-#if defined(RAD_ANDROID)
-        __android_log_print( ANDROID_LOG_ERROR, "SimpsonsHitAndRun",
-                             "[GameLog] ERROR: Failed to open gamelog.txt for writing in any path!" );
-#endif
-        return;
-    }
-
-    strncpy( s_savedPath, chosenPath.c_str(), sizeof( s_savedPath ) - 1 );
-    s_savedPath[ sizeof( s_savedPath ) - 1 ] = '\0';
-
-    time_t rawEndTime;
-    time( &rawEndTime );
-    struct tm* startInfo = localtime( &s_startTime );
-    char startStr[ 64 ] = "N/A";
-    if( startInfo != NULL )
-    {
-        strftime( startStr, sizeof( startStr ), "%Y-%m-%d %H:%M:%S", startInfo );
-    }
-
-    struct tm* endInfo = localtime( &rawEndTime );
-    char endStr[ 64 ] = "N/A";
-    if( endInfo != NULL )
-    {
-        strftime( endStr, sizeof( endStr ), "%Y-%m-%d %H:%M:%S", endInfo );
-    }
-
-    fprintf( fp, "================================================================================\n" );
-    fprintf( fp, "The Simpsons: Hit & Run - Android Game Log\n" );
-    fprintf( fp, "Saved file: %s\n", chosenPath.c_str() );
-    fprintf( fp, "Session started: %s\n", startStr );
-    fprintf( fp, "Session ended:   %s\n", endStr );
-    fprintf( fp, "Total entries:   %zu\n", s_entries.size() );
-    fprintf( fp, "================================================================================\n\n" );
-
-    for( size_t i = 0; i < s_entries.size(); i++ )
-    {
-        fprintf( fp, "%s\n", s_entries[ i ].c_str() );
-    }
-
-#if defined(RAD_ANDROID)
-    // Attempt to gather system logcat diagnostics for this session if accessible
-    FILE* pipe = popen( "logcat -d -v time -s SimpsonsHitAndRun:V SDL:V DEBUG:V AndroidRuntime:E 2>/dev/null", "r" );
-    if( pipe != NULL )
-    {
-        fprintf( fp, "\n================================================================================\n" );
-        fprintf( fp, "System & Logcat Diagnostics Capture\n" );
-        fprintf( fp, "================================================================================\n" );
-
-        char buffer[ 512 ];
-        size_t logcatLines = 0;
-        while( fgets( buffer, sizeof( buffer ), pipe ) != NULL && logcatLines < 5000 )
-        {
-            fputs( buffer, fp );
-            logcatLines++;
-        }
-        pclose( pipe );
-    }
-#endif
-
-    fprintf( fp, "\n================================================================================\n" );
-    fprintf( fp, "End of Game Log (Clean Shutdown)\n" );
-    fprintf( fp, "================================================================================\n" );
-
-    fflush( fp );
-    fsync( fileno( fp ) );
-    fclose( fp );
-
-    s_hasSaved = true;
-
-#if defined(RAD_ANDROID)
-    __android_log_print( ANDROID_LOG_INFO, "SimpsonsHitAndRun",
-                         "[GameLog] Saved complete game log (%zu entries) to '%s'",
-                         s_entries.size(), chosenPath.c_str() );
-#endif
 }
 
 extern "C" void GameLog_Record( const char* tag, const char* message )
@@ -368,3 +440,17 @@ extern "C" void GameLog_Recordf( const char* tag, const char* fmt, ... )
 
     GameLog::LogTagged( tag, buffer );
 }
+
+#if defined(RAD_ANDROID)
+extern "C" JNIEXPORT void JNICALL
+Java_com_c4rlox_simpsons_SimpsonsActivity_nativeFlushGameLog( JNIEnv* /*env*/, jclass /*clazz*/ )
+{
+    GameLog::Flush();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_libsdl_app_SDLActivity_nativeFlushGameLog( JNIEnv* /*env*/, jclass /*clazz*/ )
+{
+    GameLog::Flush();
+}
+#endif

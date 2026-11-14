@@ -31,24 +31,64 @@ public class SimpsonsActivity extends SDLActivity {
         ensureStorageDirectories();
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        try {
+            nativeFlushGameLog();
+        } catch (Throwable t) {
+            Log.e(TAG, "nativeFlushGameLog failed in onPause", t);
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        try {
+            nativeFlushGameLog();
+        } catch (Throwable t) {
+            Log.e(TAG, "nativeFlushGameLog failed in onStop", t);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        try {
+            nativeFlushGameLog();
+        } catch (Throwable t) {
+            Log.e(TAG, "nativeFlushGameLog failed in onDestroy", t);
+        }
+        super.onDestroy();
+    }
+
+    public static native void nativeFlushGameLog();
+
     private void ensureStorageDirectories() {
         try {
-            File rootDir = new File(Environment.getExternalStorageDirectory(), "Simpsons Hit and Run");
-            File filesDir = new File(rootDir, "files");
-            File modsDir = new File(rootDir, "mods");
+            File[] rootDirs = new File[] {
+                new File(Environment.getExternalStorageDirectory(), "Simpsons Hit and Run"),
+                new File(Environment.getExternalStorageDirectory(), "Simpsons and Run")
+            };
 
-            if (!filesDir.exists()) {
-                boolean created = filesDir.mkdirs();
-                Log.i(TAG, "Created files directory: " + filesDir.getAbsolutePath() + " (" + created + ")");
-            } else {
-                Log.i(TAG, "files directory exists: " + filesDir.getAbsolutePath());
-            }
+            for (File rootDir : rootDirs) {
+                if (!rootDir.exists()) {
+                    boolean created = rootDir.mkdirs();
+                    Log.i(TAG, "Created root directory: " + rootDir.getAbsolutePath() + " (" + created + ")");
+                } else {
+                    Log.i(TAG, "root directory exists: " + rootDir.getAbsolutePath());
+                }
 
-            if (!modsDir.exists()) {
-                boolean created = modsDir.mkdirs();
-                Log.i(TAG, "Created mods directory: " + modsDir.getAbsolutePath() + " (" + created + ")");
-            } else {
-                Log.i(TAG, "mods directory exists: " + modsDir.getAbsolutePath());
+                File filesDir = new File(rootDir, "files");
+                if (!filesDir.exists()) {
+                    boolean created = filesDir.mkdirs();
+                    Log.i(TAG, "Created files directory: " + filesDir.getAbsolutePath() + " (" + created + ")");
+                }
+
+                File modsDir = new File(rootDir, "mods");
+                if (!modsDir.exists()) {
+                    boolean created = modsDir.mkdirs();
+                    Log.i(TAG, "Created mods directory: " + modsDir.getAbsolutePath() + " (" + created + ")");
+                }
             }
         } catch (Exception e) {
             Log.e(TAG, "Failed to create storage directories", e);

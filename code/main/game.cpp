@@ -47,6 +47,7 @@
 
 #include <memory/srrmemory.h>
 #include <memory/memoryutilities.h>
+#include <debug/gamelog.h>
 
 #include <render/RenderFlow/renderflow.h>
 #include <sound/soundmanager.h>
@@ -856,6 +857,13 @@ void Game::Run()
         UpdateTouchContextResolverFromGame();
         TouchHudSystem::GetInstance().Update( elapsed );
         #endif
+
+        static unsigned s_lastLogFlushTime = 0;
+        if( ( newTime - s_lastLogFlushTime ) >= 3000 )
+        {
+            s_lastLogFlushTime = newTime;
+            GameLog::Flush();
+        }
        
 
         #ifdef RAD_WIN32
@@ -873,8 +881,22 @@ void Game::Run()
                 UpdateTouchHudSystemFromSDLEvent( msg );
             #endif
 #if SDL_MAJOR_VERSION < 3
+            if( msg.type == SDL_QUIT ||
+                msg.type == SDL_APP_TERMINATING ||
+                msg.type == SDL_APP_WILLENTERBACKGROUND ||
+                msg.type == SDL_APP_DIDENTERBACKGROUND )
+            {
+                GameLog::Flush();
+            }
             if( msg.type == SDL_QUIT )
 #else
+            if( msg.type == SDL_EVENT_QUIT ||
+                msg.type == SDL_EVENT_TERMINATING ||
+                msg.type == SDL_EVENT_WILL_ENTER_BACKGROUND ||
+                msg.type == SDL_EVENT_DID_ENTER_BACKGROUND )
+            {
+                GameLog::Flush();
+            }
             if( msg.type == SDL_EVENT_QUIT )
 #endif
             {
