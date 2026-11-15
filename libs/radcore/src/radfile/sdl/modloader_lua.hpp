@@ -41,6 +41,7 @@ public:
     const std::string& GetModVersion() const { return m_modVersion; }
 
     bool GetSetting( const std::string& name, ModSetting& outSetting ) const;
+    bool EnsureDirectoryExists( const std::string& path );
 
 private:
     ModLoaderLua();
@@ -49,7 +50,6 @@ private:
     bool InitLuaState();
     void CloseLuaState();
     bool MatchPattern( const char* pattern, const char* path );
-    bool EnsureDirectoryExists( const std::string& path );
     void ParseMetaIni( const std::string& metaPath );
 
     void* m_pLuaState;
