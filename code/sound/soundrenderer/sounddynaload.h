@@ -79,6 +79,7 @@ public:
 
     // Track if there are any pending swaps registered.
     static unsigned int GetNumPendingSwaps( void );
+    static void ResetPendingSwaps( void );
 
     //
     // daSoundDynaLoadRegion

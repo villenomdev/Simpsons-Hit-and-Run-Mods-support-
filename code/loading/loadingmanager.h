@@ -195,10 +195,8 @@ inline LoadingManager* GetLoadingManager() { return( LoadingManager::GetInstance
 // Return:      bool 
 //
 //=============================================================================
-inline bool LoadingManager::IsLoading()
-{
-    return ( mLoading || mRequestTail != mRequestHead );
-}
+// Defined in loadingmanager.cpp
+// bool LoadingManager::IsLoading();
 
 inline int LoadingManager::GetNumCurrentRequests() const
 {

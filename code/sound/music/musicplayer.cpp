@@ -38,6 +38,7 @@
 #include <interiors/interiormanager.h>
 
 #include <radload/radload.hpp>
+#include <debug/gamelog.h>
 
 //========================================
 // System Includes
@@ -1078,7 +1079,7 @@ void MusicPlayer::Service()
     // radmusic::composition_new_from_file( const char * p_file_name );
     //
       
-    if( m_isLoadingMusic && ( m_radLoadRequest->IsComplete( ) ) )
+    if( m_isLoadingMusic && ( m_radLoadRequest != NULL ) && ( m_radLoadRequest->IsComplete( ) ) )
     {
         SetUpPerformance( & m_musicPerformance, & m_musicComposition, MUSIC_SEARCH_PATH );
          
@@ -1089,9 +1090,14 @@ void MusicPlayer::Service()
         //
         buildEventTables();
 
-        m_loadCompleteCallback->LoadCompleted();
+        if( m_loadCompleteCallback != NULL )
+        {
+            SoundFileHandler* cb = m_loadCompleteCallback;
+            m_loadCompleteCallback = NULL;
+            cb->LoadCompleted();
+        }
     }
-    else if( m_isLoadingAmbient && m_radLoadRequest->IsComplete( ) )
+    else if( m_isLoadingAmbient && ( m_radLoadRequest != NULL ) && m_radLoadRequest->IsComplete( ) )
     {
         SetUpPerformance( & m_ambientPerformance, & m_ambientComposition, AMBIENCE_SEARCH_PATH );
                 
@@ -1102,7 +1108,44 @@ void MusicPlayer::Service()
             rAssert( radmusic::performance_num_events( m_ambientPerformance ) == AEVENT_NUM_EVENTS );
         }
 
-        m_loadCompleteCallback->LoadCompleted();
+        if( m_loadCompleteCallback != NULL )
+        {
+            SoundFileHandler* cb = m_loadCompleteCallback;
+            m_loadCompleteCallback = NULL;
+            cb->LoadCompleted();
+        }
+    }
+
+    // Safety watchdog: prevent asynchronous music script loads from stalling LoadingManager forever
+    static unsigned int s_musicLoadWatchdog = 0;
+    if( m_isLoadingMusic || m_isLoadingAmbient )
+    {
+        s_musicLoadWatchdog++;
+        if( s_musicLoadWatchdog > 180 ) // ~3 seconds at 60 FPS
+        {
+            rReleasePrintf("MusicPlayer: Async load timed out (%u ticks) for '%s'. Forcing completion.\n",
+                           s_musicLoadWatchdog, n_currentLoadName);
+            GameLog_Recordf("MusicPlayer", "Async load timed out (%u ticks) for '%s'. Forcing completion.",
+                            s_musicLoadWatchdog, n_currentLoadName);
+            s_musicLoadWatchdog = 0;
+            m_isLoadingMusic = false;
+            m_isLoadingAmbient = false;
+            if( m_radLoadRequest != NULL )
+            {
+                m_radLoadRequest->Release();
+                m_radLoadRequest = NULL;
+            }
+            if( m_loadCompleteCallback != NULL )
+            {
+                SoundFileHandler* cb = m_loadCompleteCallback;
+                m_loadCompleteCallback = NULL;
+                cb->LoadCompleted();
+            }
+        }
+    }
+    else
+    {
+        s_musicLoadWatchdog = 0;
     }
 
     HeapMgr()->PopHeap( GMA_AUDIO_PERSISTENT );
@@ -1203,8 +1246,69 @@ void MusicPlayer::QueueMusicLevelLoad( RenderEnums::LevelEnum level )
 //=============================================================================
 void MusicPlayer::LoadRadmusicScript( const char* filename, SoundFileHandler* fileHandler )
 {
-    rAssert( NULL == m_radLoadRequest );
-    
+    // 1. If this exact script is already loaded and ready, reuse it immediately!
+    if( strcmp( filename, AMBIENT_FILE_NAME ) != 0 )
+    {
+        if( m_musicComposition != NULL && m_musicPerformance != NULL && strcmp( n_currentLoadName, filename ) == 0 )
+        {
+            GameLog_Recordf("MusicPlayer", "RadMusic script '%s' already loaded, reusing active performance", filename);
+            if( fileHandler != NULL )
+            {
+                fileHandler->LoadCompleted();
+            }
+            return;
+        }
+    }
+
+    // 2. Synchronous composition loading: avoids radLoad async queue stalls/deadlocks completely
+    strncpy( n_currentLoadName, filename, 64 );
+    n_currentLoadName[63] = '\0';
+
+    HeapMgr()->PushHeap( GMA_MUSIC );
+    radmusic::composition* pComp = radmusic::composition_new_from_file( n_currentLoadName );
+    HeapMgr()->PopHeap( GMA_MUSIC );
+
+    if( pComp != NULL )
+    {
+        if( strcmp( filename, AMBIENT_FILE_NAME ) == 0 )
+        {
+            if( m_ambientPerformance != NULL )
+            {
+                radmusic::performance_stop( m_ambientPerformance );
+                radmusic::performance_delete( & m_ambientPerformance );
+                m_ambientPerformance = NULL;
+            }
+            if( m_ambientComposition != NULL )
+            {
+                radmusic::composition_delete( & m_ambientComposition );
+                m_ambientComposition = NULL;
+            }
+            m_ambientComposition = pComp;
+            m_ambientPerformance = radmusic::performance_new( m_ambientComposition, AMBIENCE_SEARCH_PATH );
+            m_isLoadingAmbient = false;
+        }
+        else
+        {
+            UnloadRadmusicScript();
+            m_musicComposition = pComp;
+            m_musicPerformance = radmusic::performance_new( m_musicComposition, MUSIC_SEARCH_PATH );
+            m_isLoadingMusic = false;
+            buildEventTables();
+        }
+
+        GameLog_Recordf("MusicPlayer", "Loaded RadMusic script '%s' synchronously (performance=%p)", filename,
+                        (strcmp( filename, AMBIENT_FILE_NAME ) == 0) ? (void*)m_ambientPerformance : (void*)m_musicPerformance);
+
+        if( fileHandler != NULL )
+        {
+            m_loadCompleteCallback = NULL;
+            fileHandler->LoadCompleted();
+        }
+        return;
+    }
+
+    GameLog_Recordf("MusicPlayer", "composition_new_from_file returned NULL for '%s', falling back to radLoad", filename);
+
     if( strcmp( filename, AMBIENT_FILE_NAME ) == 0 )
     {
         m_isLoadingAmbient = true;
@@ -1218,9 +1322,6 @@ void MusicPlayer::LoadRadmusicScript( const char* filename, SoundFileHandler* fi
     m_loadCompleteCallback = fileHandler;
     
     // We have to keep the string around--problem with radload.
-    
-    strncpy( n_currentLoadName, filename, 64 );
-
     radLoadOptions options;
     options.filename  = n_currentLoadName; 
     options.allocator = GMA_MUSIC;

@@ -270,8 +270,10 @@ void radLoadManager::Load( radLoadOptions* options, radLoadRequest** request )
     QueueItem* item = new QueueItem( *options );
     ::radMemorySetCurrentAllocator( old );
     item->AddRef();
+    m_pMutex->Lock();
     m_pLoadQueue->Push( item );
     item->SetState( QUEUED );
+    m_pMutex->Unlock();
     *request = static_cast<radLoadRequest*>(item);
     if( options->stream )
     {
@@ -386,7 +388,7 @@ void radLoadManager::SetSyncLoading( bool sync )
 void radLoadManager::SwitchTasks()
 {
     m_pMutex->Unlock();
-    radThreadSleep(0);
+    radThreadSleep(1);
     m_pMutex->Lock();
 }
 

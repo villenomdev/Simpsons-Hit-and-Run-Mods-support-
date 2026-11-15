@@ -323,6 +323,31 @@ void LoadingManager::OnLoadFileComplete( void* pUserData )
     this->ProcessNextRequest();
 }
 
+//=============================================================================
+// LoadingManager::IsLoading
+//=============================================================================
+bool LoadingManager::IsLoading()
+{
+    if( mLoading && mRequestHead != mRequestTail )
+    {
+        LoadingRequest& req = mRequests[mRequestHead];
+        if( req.startTime > 0 )
+        {
+            unsigned int elapsed = radTimeGetMilliseconds() - req.startTime;
+            if( elapsed > 8000 ) // 8 seconds per-request safety watchdog
+            {
+                rReleasePrintf("LoadingManager: WATCHDOG hung request '%s' (%u ms, head=%u, tail=%u)! Forcing completion.\n",
+                               req.filename, elapsed, mRequestHead, mRequestTail);
+                GameLog_Recordf("LoadingManager", "WATCHDOG: Request '%s' hung for %u ms (head=%u, tail=%u)! Forcing completion.",
+                                req.filename, elapsed, mRequestHead, mRequestTail);
+                req.startTime = 0; // prevent re-entry
+                this->OnLoadFileComplete( &req );
+            }
+        }
+    }
+    return ( mLoading || mRequestTail != mRequestHead );
+}
+
 
 //==============================================================================
 // LoadingManager::LoadSync

@@ -585,6 +585,24 @@ unsigned int  daSoundDynaLoadRegion::GetNumPendingSwaps( void )
     return( s_GlobalPendingSwapCount );
 }
 
+void daSoundDynaLoadRegion::ResetPendingSwaps( void )
+{
+    daSoundDynaLoadRegion* pRegion = daSoundDynaLoadRegion::GetLinkedClassHead( );
+    while( pRegion != NULL )
+    {
+        for( unsigned int s = 0; s < pRegion->GetNumSlots( ); s++ )
+        {
+            if( pRegion->GetPendingSwapObject( s ) != NULL )
+            {
+                pRegion->SetPendingSwapObject( s, NULL );
+            }
+        }
+        pRegion = pRegion->GetLinkedClassNext( );
+    }
+    ClearActiveSwap( );
+    s_GlobalPendingSwapCount = 0;
+}
+
 //=============================================================================
 // Function:    daSoundDynaLoadRegion::GetPendingSwapObject
 //=============================================================================
@@ -804,11 +822,13 @@ void daSoundDynaLoadManager::ServiceOncePerFrame( void )
         else
         {
             s_pendingSwapWatchdog++;
-            if ( s_pendingSwapWatchdog > 300 ) // ~5 seconds at 60 FPS
+            if ( s_pendingSwapWatchdog > 120 ) // ~2 seconds at 60 FPS
             {
-                rReleasePrintf("daSoundDynaLoadManager: Pending swaps timed out (%u remaining)! Forcing completion callback.\n",
+                rReleasePrintf("daSoundDynaLoadManager: Pending swaps timed out (%u remaining)! Resetting pending swaps and forcing completion callback.\n",
                                daSoundDynaLoadRegion::GetNumPendingSwaps());
                 s_pendingSwapWatchdog = 0;
+                daSoundDynaLoadRegion::ResetPendingSwaps( );
+
                 callback = m_pCompletionCallback;
                 m_pCompletionCallback = NULL;
                 m_pCompletionUserData = NULL;

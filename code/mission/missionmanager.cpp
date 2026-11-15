@@ -522,14 +522,6 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
 
             if( GetLoadingManager()->IsLoading() || GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
             {
-                // As long as requests are in flight in LoadingManager, never time out
-                if( GetLoadingManager()->IsLoading() )
-                {
-                    s_missionLoadingWatchdog = 0;
-                    s_lastRequestsRemaining = GetLoadingManager()->GetNumCurrentRequests();
-                    break;
-                }
-
                 int curReq = GetLoadingManager()->GetNumCurrentRequests();
                 if( curReq != s_lastRequestsRemaining )
                 {
@@ -541,13 +533,13 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
                     s_missionLoadingWatchdog++;
                 }
 
-                if( s_missionLoadingWatchdog > 1800 )
+                if( s_missionLoadingWatchdog > 450 ) // ~7.5 seconds without queue progress
                 {
-                    rReleasePrintf("[WARN ] [MissionManager] STATE_MISSION_LOADING timeout (%d ticks). IsLoading=%d, VehicleUnderConstruction=%p. Force advancing to STATE_MISSION_INIT.\n",
+                    rReleasePrintf("[WARN ] [MissionManager] STATE_MISSION_LOADING timeout (%d ticks without progress). IsLoading=%d, VehicleUnderConstruction=%p. Force advancing to STATE_MISSION_INIT.\n",
                                    s_missionLoadingWatchdog,
                                    (int)GetLoadingManager()->IsLoading(),
                                    GetVehicleCentral()->GetCurrentVehicleUnderConstruction());
-                    GameLog_Recordf("MissionManager", "STATE_MISSION_LOADING timeout (%d ticks), force advancing to STATE_MISSION_INIT. IsLoading=%d",
+                    GameLog_Recordf("MissionManager", "STATE_MISSION_LOADING timeout (%d ticks without progress), force advancing to STATE_MISSION_INIT. IsLoading=%d",
                                     s_missionLoadingWatchdog, (int)GetLoadingManager()->IsLoading());
                     s_missionLoadingWatchdog = 0;
                     if( GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
@@ -571,14 +563,6 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
 
             if( GetLoadingManager()->IsLoading() || GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
             {
-                // As long as requests are in flight in LoadingManager, never time out
-                if( GetLoadingManager()->IsLoading() )
-                {
-                    s_missionInitingWatchdog = 0;
-                    s_lastInitingRequestsRemaining = GetLoadingManager()->GetNumCurrentRequests();
-                    break;
-                }
-
                 int curReq = GetLoadingManager()->GetNumCurrentRequests();
                 if( curReq != s_lastInitingRequestsRemaining )
                 {
@@ -590,13 +574,13 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
                     s_missionInitingWatchdog++;
                 }
 
-                if( s_missionInitingWatchdog > 1800 )
+                if( s_missionInitingWatchdog > 450 ) // ~7.5 seconds without queue progress
                 {
-                    rReleasePrintf("[WARN ] [MissionManager] STATE_MISSION_INITING timeout (%d ticks). IsLoading=%d, VehicleUnderConstruction=%p. Force advancing to STATE_MISSION_DYNALOAD.\n",
+                    rReleasePrintf("[WARN ] [MissionManager] STATE_MISSION_INITING timeout (%d ticks without progress). IsLoading=%d, VehicleUnderConstruction=%p. Force advancing to STATE_MISSION_DYNALOAD.\n",
                                    s_missionInitingWatchdog,
                                    (int)GetLoadingManager()->IsLoading(),
                                    GetVehicleCentral()->GetCurrentVehicleUnderConstruction());
-                    GameLog_Recordf("MissionManager", "STATE_MISSION_INITING timeout (%d ticks), force advancing to STATE_MISSION_DYNALOAD. IsLoading=%d",
+                    GameLog_Recordf("MissionManager", "STATE_MISSION_INITING timeout (%d ticks without progress), force advancing to STATE_MISSION_DYNALOAD. IsLoading=%d",
                                     s_missionInitingWatchdog, (int)GetLoadingManager()->IsLoading());
                     s_missionInitingWatchdog = 0;
                     if( GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
