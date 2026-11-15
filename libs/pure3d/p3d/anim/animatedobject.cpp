@@ -487,8 +487,8 @@ tEntity* tAnimatedObjectFactoryLoader::LoadObject(tChunkFile* f, tEntityStore* s
     memset(factory->poseControllers,-1,factory->numAnimations*sizeof(int));
     memset(factory->visibilityControllers,-1,factory->numAnimations*sizeof(int));
     memset(factory->numEffects,0,factory->numAnimations*sizeof(unsigned int));
-    memset(factory->effects,0,factory->numAnimations*sizeof(int));
-    memset(factory->effectControllers,0,factory->numAnimations*sizeof(int));
+    memset(factory->effects,0,factory->numAnimations*sizeof(int*));
+    memset(factory->effectControllers,0,factory->numAnimations*sizeof(int*));
 
     tAnimatedObjectAnimationLoader loader;
 

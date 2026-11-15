@@ -52,6 +52,13 @@ IRadSoundHalDataSource::State radSoundRsdFileDataSource::GetState( void )
                 radMemorySpace_Local );
         }
         	    
+        if ( m_refIRadFile == NULL )
+        {
+            m_StateInfo.m_State = StateInfo::FILE_ERROR;
+            m_FramesLeftInFile = 0;
+            return IRadSoundHalDataSource::Error;
+        }
+
 	    m_StateInfo.m_State = StateInfo::OPENING_FILE;
 	     
         m_refIRadFile->AddCompletionCallback( this, NULL );
@@ -127,15 +134,34 @@ void radSoundRsdFileDataSource::InitializeFromFileName
 
 IRadSoundHalAudioFormat * radSoundRsdFileDataSource::GetFormat( void )
 {
-    rAssert( m_StateInfo.m_State == StateInfo::IDLE || m_StateInfo.m_State == StateInfo::READING_DATA );
-    rAssert( m_refIRadSoundHalAudioFormat != NULL );
+    if ( m_refIRadSoundHalAudioFormat == NULL )
+    {
+        static ref< IRadSoundHalAudioFormat > s_fallbackFormat = NULL;
+        if ( s_fallbackFormat == NULL )
+        {
+            s_fallbackFormat = ::radSoundHalAudioFormatCreate( RADMEMORY_ALLOC_DEFAULT );
+            if ( s_fallbackFormat != NULL )
+            {
+                s_fallbackFormat->Initialize(
+                    IRadSoundHalAudioFormat::PCM,
+                    NULL,
+                    32000,
+                    2,
+                    16 );
+            }
+        }
+        return s_fallbackFormat;
+    }
 
 	return m_refIRadSoundHalAudioFormat;
 }
 
 unsigned int radSoundRsdFileDataSource::GetRemainingFrames( void )
 {
-    rAssert( m_StateInfo.m_State == StateInfo::IDLE || m_StateInfo.m_State == StateInfo::READING_DATA );
+    if ( m_StateInfo.m_State == StateInfo::FILE_ERROR || m_refIRadFile == NULL )
+    {
+        return 0;
+    }
 	return m_FramesLeftInFile;
 }
 
@@ -251,7 +277,7 @@ void radSoundRsdFileDataSource::OnFileOperationsComplete( void* pUserData )
 
 void radSoundRsdFileDataSource::_StateOpeningFile( void )
 {
-	if( m_refIRadFile->IsOpen( ) == true )
+	if( m_refIRadFile != NULL && m_refIRadFile->IsOpen( ) == true )
 	{
         m_refIRadFile->SetBufferedRead( IRadFile::BufferedReadOn );
         if ( m_refIRadSoundHalAudioFormat == NULL )
@@ -310,7 +336,14 @@ void radSoundRsdFileDataSource::_StateOpeningFile( void )
 	}
 	else
 	{
-		rTunePrintf( "Failed to open file: [%s]\n", m_refIRadFile->GetFilename( ) );
+        if ( m_refIRadFile != NULL )
+        {
+		    rTunePrintf( "Failed to open file: [%s]\n", m_refIRadFile->GetFilename( ) );
+        }
+        else
+        {
+		    rTunePrintf( "Failed to open file: [%s] (NULL handle)\n", fileName );
+        }
 
 		//
 		// The file system didn't find our file.  Say that the
@@ -371,7 +404,8 @@ void radSoundRsdFileDataSource::_StateReadingHeader( void )
 
 void radSoundRsdFileDataSource::InitFile( void )
 {
-    if ( m_refIRadSoundHalAudioFormat == NULL || m_refIRadSoundHalAudioFormat->GetFrameSizeInBytes( ) <= 0.0f )
+    if ( m_refIRadSoundHalAudioFormat == NULL || m_refIRadSoundHalAudioFormat->GetFrameSizeInBytes( ) <= 0.0f ||
+         m_refIRadFile == NULL || !m_refIRadFile->IsOpen( ) || m_refIRadFile->GetSize( ) < RSD_FILE_DATA_OFFSET )
     {
         m_StateInfo.m_State = StateInfo::FILE_ERROR;
         m_FramesLeftInFile = 0;
@@ -394,18 +428,18 @@ void radSoundRsdFileDataSource::InitFile( void )
 
 	// Calculate the amount of data contained in the file
 
-	m_FramesLeftInFile = m_refIRadSoundHalAudioFormat->BytesToFrames(
-		m_refIRadFile->GetSize( ) - RSD_FILE_DATA_OFFSET );
+	unsigned int rawDataBytes = m_refIRadFile->GetSize( ) - RSD_FILE_DATA_OFFSET;
+	m_FramesLeftInFile = m_refIRadSoundHalAudioFormat->BytesToFrames( rawDataBytes );
 
-	rAssert( m_refIRadSoundHalAudioFormat->BytesToFrames( initialPlaybackOffsetInBytes ) < m_FramesLeftInFile );
-	m_FramesLeftInFile -= m_refIRadSoundHalAudioFormat->BytesToFrames( initialPlaybackOffsetInBytes );
-
-	//
-	// An important assertion: The filesize needs to be a multiple of the framesize
-	//
-	unsigned int fileDataSize = m_refIRadFile->GetSize( ) - RSD_FILE_DATA_OFFSET - initialPlaybackOffsetInBytes;
-	unsigned int roundedBytes = m_refIRadSoundHalAudioFormat->FramesToBytes( m_FramesLeftInFile );
-	rAssertMsg( fileDataSize == roundedBytes, "File Data is not block aligned (corrupted )" );
+	unsigned int initialPlaybackOffsetInFrames = m_refIRadSoundHalAudioFormat->BytesToFrames( initialPlaybackOffsetInBytes );
+	if ( initialPlaybackOffsetInFrames >= m_FramesLeftInFile )
+	{
+		initialPlaybackOffsetInBytes = 0;
+	}
+	else
+	{
+		m_FramesLeftInFile -= initialPlaybackOffsetInFrames;
+	}
 
 	// Move into the idle state before possibly getting called back
 
@@ -418,7 +452,10 @@ void radSoundRsdFileDataSource::InitFile( void )
     // Bit of a hack here, service the sound system so streamers pool the IsInitialized()
     // flag right now.
 
-    ::radSoundHalSystemGet( )->Service( );
+    if ( ::radSoundHalSystemGet( ) != NULL )
+    {
+        ::radSoundHalSystemGet( )->Service( );
+    }
 }
 
 void radSoundRsdFileDataSource::_StateIdle( void )

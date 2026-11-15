@@ -150,6 +150,9 @@ bool tName::operator!=( const tName& other ) const
 
 const tName& tName::operator=(const tName& other)
 {
+    if(this == NULL)
+        return other;
+
     //Assignment of self to self, strcpy doesn't like that.
     if(this == &other)
         return *this;

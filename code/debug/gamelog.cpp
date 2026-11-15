@@ -23,6 +23,7 @@
 #include <mutex>
 #include <signal.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <ucontext.h>
 #include <stdint.h>
@@ -176,7 +177,7 @@ namespace
                 fprintf( fp, "================================================================================\n" );
                 fprintf( fp, "The Simpsons: Hit & Run - Diagnostic Game Log\n" );
                 fprintf( fp, "Target file:     %s\n", filePath.c_str() );
-                fprintf( fp, "App Version:     v0.93.34 (versionCode 127)\n" );
+                fprintf( fp, "App Version:     v0.93.35 (versionCode 128)\n" );
                 fprintf( fp, "Architecture:    %s\n", abi );
                 fprintf( fp, "Session started: %s\n", startStr );
                 fprintf( fp, "Active Mod:      %s\n", s_activeModName );
@@ -243,7 +244,72 @@ namespace
 #endif
         }
 
-        char crashHeader[ 512 ];
+        char mapsInfo[ 2048 ] = { 0 };
+        int mapsFd = open( "/proc/self/maps", O_RDONLY );
+        if( mapsFd >= 0 )
+        {
+            char lineBuf[ 512 ];
+            char readBuf[ 4096 ];
+            ssize_t bytesRead = 0;
+            size_t linePos = 0;
+            size_t mapsInfoLen = 0;
+
+            while( ( bytesRead = read( mapsFd, readBuf, sizeof( readBuf ) ) ) > 0 )
+            {
+                for( ssize_t i = 0; i < bytesRead; i++ )
+                {
+                    char c = readBuf[ i ];
+                    if( c == '\n' || linePos >= sizeof( lineBuf ) - 1 )
+                    {
+                        lineBuf[ linePos ] = '\0';
+                        linePos = 0;
+
+                        if( strstr( lineBuf, "libmain.so" ) != NULL ||
+                            strstr( lineBuf, "libSDL2.so" ) != NULL ||
+                            strstr( lineBuf, "libopenal.so" ) != NULL )
+                        {
+                            uintptr_t start = 0, end = 0;
+                            char perms[ 8 ] = { 0 };
+                            if( sscanf( lineBuf, "%lx-%lx %7s", &start, &end, perms ) >= 2 )
+                            {
+                                if( perms[ 2 ] == 'x' )
+                                {
+                                    const char* libName = strrchr( lineBuf, '/' );
+                                    libName = libName ? libName + 1 : "unknown";
+                                    char entry[ 256 ];
+                                    long long offsetPc = (long long)pc - (long long)start;
+                                    long long offsetLr = (long long)lr - (long long)start;
+                                    if( pc >= start && pc < end )
+                                    {
+                                        snprintf( entry, sizeof( entry ), "Module (PC):     %s [base %p, offset +0x%llx]\n", libName, (void*)start, offsetPc );
+                                    }
+                                    else if( lr >= start && lr < end )
+                                    {
+                                        snprintf( entry, sizeof( entry ), "Module (LR):     %s [base %p, offset +0x%llx]\n", libName, (void*)start, offsetLr );
+                                    }
+                                    else
+                                    {
+                                        snprintf( entry, sizeof( entry ), "Library Map:     %s [exec range %p - %p]\n", libName, (void*)start, (void*)end );
+                                    }
+                                    if( mapsInfoLen + strlen( entry ) < sizeof( mapsInfo ) - 1 )
+                                    {
+                                        strcat( mapsInfo, entry );
+                                        mapsInfoLen += strlen( entry );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        lineBuf[ linePos++ ] = c;
+                    }
+                }
+            }
+            close( mapsFd );
+        }
+
+        char crashHeader[ 2560 ];
         snprintf( crashHeader, sizeof( crashHeader ),
                   "\n================================================================================\n"
                   "[FATAL CRASH DETECTED]\n"
@@ -251,9 +317,10 @@ namespace
                   "Fault Address:   %p\n"
                   "Program Counter: %p\n"
                   "Link Register:   %p\n"
+                  "%s"
                   "Description:     The game process encountered a critical fatal error and crashed.\n"
                   "================================================================================\n",
-                  sig, sigName, info ? info->si_addr : NULL, (void*)pc, (void*)lr );
+                  sig, sigName, info ? info->si_addr : NULL, (void*)pc, (void*)lr, mapsInfo );
 
         // Write directly to open log streams
         for( size_t i = 0; i < s_openFiles.size(); i++ )
@@ -298,7 +365,7 @@ void GameLog::Initialize()
 
     char initMsg[ 256 ];
     snprintf( initMsg, sizeof( initMsg ),
-              "[%s] [INFO  ] [GameLog   ] Initialized diagnostic execution log (v0.93.34)", timeStr );
+              "[%s] [INFO  ] [GameLog   ] Initialized diagnostic execution log (v0.93.35)", timeStr );
     s_entries.push_back( initMsg );
 
     s_initialized = true;

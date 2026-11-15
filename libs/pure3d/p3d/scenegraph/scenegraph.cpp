@@ -486,8 +486,14 @@ void Branch::SetFlags(bool set, unsigned f, Propagation prop, bool stopIfSet)
                 return;
         }
 
-        for(int i = 0; i < allocatedChildren; i++)
-            if(children[i]) children[i]->SetFlags(set,f,prop, stopIfSet);
+        if(children)
+        {
+            for(int i = 0; i < allocatedChildren; i++)
+            {
+                if(children[i])
+                    children[i]->SetFlags(set,f,prop, stopIfSet);
+            }
+        }
     }
 
     Node::SetFlags(set,f,prop, stopIfSet);
@@ -498,8 +504,11 @@ void Branch::Resize(int n)
 {
     allocatedChildren = n;
     Node** newChildren= new Node*[allocatedChildren];
-    memset(newChildren,0, sizeof(int)*allocatedChildren);
-    memcpy(newChildren,children, sizeof(Node*)*nChildren);
+    memset(newChildren, 0, sizeof(Node*) * allocatedChildren);
+    if(children && nChildren > 0)
+    {
+        memcpy(newChildren, children, sizeof(Node*) * nChildren);
+    }
     delete [] children;
     children = newChildren;
 }
