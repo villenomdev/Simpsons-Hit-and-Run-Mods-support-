@@ -1473,7 +1473,9 @@ void Win32Platform::InitializeFoundationDrive()
 
     rAssert( mpIRadDrive != NULL );
 
+#if !defined(RAD_ANDROID)
     mpIRadDrive->RegisterErrorHandler( this, NULL );
+#endif
 }
 
 

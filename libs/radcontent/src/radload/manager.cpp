@@ -78,7 +78,6 @@ m_pMutex( NULL )
     m_pCallbacks ->AddRef();
 
     ::radThreadCreateMutex( &m_pMutex );
-    m_pMutex->Lock();
     ::radThreadCreateThread( &m_pThread, radLoadManager::LoadThreadEntry, static_cast<void*>(this), IRadThread::PriorityNormal, init.loadThreadStackSize );
 
 #ifdef RADLOAD_GATHER_STATS
@@ -374,17 +373,15 @@ void radLoadManager::Service()
     }
 
     m_pMutex->Lock();
-    if(!m_pCallbacks->Empty())
+    while(!m_pCallbacks->Empty())
     {
         radLoadCallback* callback = m_pCallbacks->Pop();
         m_pMutex->Unlock();
         callback->Done();
         callback->Release();
+        m_pMutex->Lock();
     }
-    else
-    {
-        m_pMutex->Unlock();
-    }
+    m_pMutex->Unlock();
 }
 
 void radLoadManager::SetSyncLoading( bool sync )

@@ -395,8 +395,15 @@ bool radDriveThread::OutstandingRequests( void )
 
 void radDriveThread::WaitGlobalError( radDrive* drive )
 {
+#if defined(RAD_ANDROID)
+    // On Android, never suspend the drive thread on missing/corrupt files.
+    // Errors must fail immediately to avoid freezing asynchronous queues.
+    (void)drive;
+    return;
+#else
     drive->SetErrorState( );
     m_pErrorSemaphore->Wait( );
+#endif
 }
 
 //=============================================================================

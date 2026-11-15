@@ -168,7 +168,9 @@ void tFileFTT::WaitForCompletion( void )
     while(!m_pIRadFile->CheckForCompletion())
     {
         i++;
+        ::radFileService();
         p3d::loadManager->SwitchTask();
+        radThreadSleep(0);
         gLastTime = radTimeGetMicroseconds64();
     }
     if(i>0)

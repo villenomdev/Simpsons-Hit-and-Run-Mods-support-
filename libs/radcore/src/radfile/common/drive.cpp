@@ -257,7 +257,11 @@ void radDrive::RegisterErrorHandler( IRadDriveErrorCallback* callback, void* pUs
     m_pErrorThread = ::radThreadGetActiveThread( );
     m_pErrorCallback = callback;
     m_pUserData = pUserData;
+#if defined(RAD_ANDROID)
+    m_ErrorBehaviour = IRadDrive::Fail;
+#else
     m_ErrorBehaviour = IRadDrive::Suspend;
+#endif
     Unlock( );
 }
 
@@ -302,7 +306,11 @@ void radDrive::RegisterErrorEvent( IRadThreadSemaphore* pSemaphore )
 
     Lock( );
     m_pErrorUserSemaphore = pSemaphore;
+#if defined(RAD_ANDROID)
+    m_ErrorBehaviour = IRadDrive::Fail;
+#else
     m_ErrorBehaviour = IRadDrive::Suspend;
+#endif
     Unlock( );
 }
 
@@ -341,7 +349,11 @@ void radDrive::UnregisterErrorEvent( IRadThreadSemaphore* pSemaphore )
 void radDrive::SetDefaultErrorBehaviour( IRadDrive::ErrorBehaviour behaviour )
 {
     Lock( );
+#if defined(RAD_ANDROID)
+    m_ErrorBehaviour = IRadDrive::Fail;
+#else
     m_ErrorBehaviour = behaviour;
+#endif
     Unlock( );
 }
 
@@ -351,10 +363,14 @@ void radDrive::SetDefaultErrorBehaviour( IRadDrive::ErrorBehaviour behaviour )
 
 IRadDrive::ErrorBehaviour radDrive::GetDefaultErrorBehaviour( void )
 {
+#if defined(RAD_ANDROID)
+    return IRadDrive::Fail;
+#else
     Lock( );
     IRadDrive::ErrorBehaviour errorBehaviour = m_ErrorBehaviour;
     Unlock( );
     return errorBehaviour;
+#endif
 }
 
 //=============================================================================
