@@ -3,11 +3,20 @@
 
 #include <string>
 #include <vector>
+#include <map>
 
 struct ModPathHandlerRule
 {
     std::string pattern;
     std::string scriptPath;
+};
+
+struct ModSetting
+{
+    std::string name;
+    std::string type;
+    std::string defaultValue;
+    std::string currentValue;
 };
 
 class ModLoaderLua
@@ -28,6 +37,10 @@ public:
     const std::string& GetActiveModPath() const { return m_activeModPath; }
     const std::string& GetGameDirPath() const { return m_gameDirPath; }
     const std::string& GetActiveModName() const { return m_activeModName; }
+    const std::string& GetModTitle() const { return m_modTitle; }
+    const std::string& GetModVersion() const { return m_modVersion; }
+
+    bool GetSetting( const std::string& name, ModSetting& outSetting ) const;
 
 private:
     ModLoaderLua();
@@ -37,6 +50,7 @@ private:
     void CloseLuaState();
     bool MatchPattern( const char* pattern, const char* path );
     bool EnsureDirectoryExists( const std::string& path );
+    void ParseMetaIni( const std::string& metaPath );
 
     void* m_pLuaState;
     bool m_initialized;
@@ -45,6 +59,10 @@ private:
     std::string m_activeModPath;
     std::string m_gameDirPath;
     std::string m_cacheDir;
+
+    std::string m_modTitle;
+    std::string m_modVersion;
+    std::map<std::string, ModSetting> m_settings;
 
     std::vector<ModPathHandlerRule> m_rules;
 };

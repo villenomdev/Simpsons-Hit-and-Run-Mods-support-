@@ -2362,12 +2362,19 @@ void Character::AddToWorldScene( void )
         UpdateBBox( dummyBox );
 
         rAssert( mpWorldScene == 0 );
-        mpWorldScene = ((WorldRenderLayer*)GetRenderManager()->mpLayer(RenderEnums::LevelSlot))->pWorldScene();
-        mpWorldScene->Add( this );
+        RenderLayer* rl = GetRenderManager()->mpLayer(RenderEnums::LevelSlot);
+        if( rl != NULL )
+        {
+            mpWorldScene = ((WorldRenderLayer*)rl)->pWorldScene();
+            if( mpWorldScene != NULL )
+            {
+                mpWorldScene->Add( this );
+            }
+        }
 
         //UpdateProps( 0.0f );
 
-        mVisible = true;
+        mVisible = ( mpWorldScene != NULL );
     }
 }
 /*
@@ -2386,7 +2393,10 @@ void Character::RemoveFromWorldScene( void )
 {
     if( mVisible )
     {
-        mpWorldScene->Remove( this );
+        if( mpWorldScene != NULL )
+        {
+            mpWorldScene->Remove( this );
+        }
         mpWorldScene = 0;
         mVisible = false;
     }
@@ -2396,7 +2406,7 @@ void Character::RemoveFromWorldScene( void )
 
 void Character::MoveInWorldScene( void )
 {
-    if( mVisible )
+    if( mVisible && mpWorldScene != NULL )
     {
         rmt::Box3D oldBox;
         UpdateBBox( oldBox );

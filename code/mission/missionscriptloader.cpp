@@ -906,15 +906,17 @@ void MissionScriptLoader::AddPurchaseCarReward( int argc, const char** argv )
     sprintf(uniqueName, "reward_%s", argv[2]);
 
     Character* c = GetCharacterManager()->AddCharacterDeferedLoad( CharacterManager::NPC, uniqueName, argv[2], argv[3], argv[4] );
-    c->SetRole(Character::ROLE_REWARD);
-    c->SetAmbient(argv[4], 0.0f);
+    if ( c != NULL )
+    {
+        c->SetRole(Character::ROLE_REWARD);
+        c->SetAmbient(argv[4], 0.0f);
+        c->SetRenderLayer(RenderEnums::LevelSlot);
+        c->AddToWorldScene();
+    }
 
     //This is a hack to tie the character name to the action event.
     rewLoc->SetJointNameSize( strlen( uniqueName ) );
     rewLoc->SetJointName( uniqueName );
-
-    c->SetRenderLayer(RenderEnums::LevelSlot);
-    c->AddToWorldScene();
 
     rewLoc->SetButtonInput( (CharacterController::DoAction ) );
     rewLoc->SetShouldTransform( false );
@@ -4377,8 +4379,11 @@ void MissionScriptLoader::AddNPCCharacterBonusMission( int argc, const char** ar
     sprintf(uniqueName, "b_%s", argv[1]);
     
     Character* c = GetCharacterManager()->AddCharacterDeferedLoad( CharacterManager::NPC, uniqueName, argv[1], argv[2], argv[3] );
-    c->AddToWorldScene();
-    c->SetRole(Character::ROLE_ACTIVE_BONUS);
+    if ( c != NULL )
+    {
+        c->AddToWorldScene();
+        c->SetRole(Character::ROLE_ACTIVE_BONUS);
+    }
 
     if ( !GetGameplayManager()->mIsDemo )
     {
@@ -4503,8 +4508,11 @@ void MissionScriptLoader::AddAmbientCharacter( int argc, const char** argv )
     }
 
     Character* c = GetCharacterManager()->AddCharacterDeferedLoad( CharacterManager::NPC, argv[1], argv[1], "npd", argv[2] );
-    c->SetAmbient(argv[2], (argc == 4) ? (float)atof(argv[3]) : 1.3f);
-    c->AddToWorldScene();
+    if ( c != NULL )
+    {
+        c->SetAmbient(argv[2], (argc == 4) ? (float)atof(argv[3]) : 1.3f);
+        c->AddToWorldScene();
+    }
 }
 
 void MissionScriptLoader::AddBonusMissionNPCWaypoint( int argc, const char** argv )

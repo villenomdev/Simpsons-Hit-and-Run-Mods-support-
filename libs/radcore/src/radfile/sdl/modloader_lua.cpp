@@ -13,8 +13,10 @@ extern "C" {
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <algorithm>
 #include <vector>
+#include <fstream>
 
 #if defined(RAD_ANDROID)
 #include <android/log.h>
@@ -73,8 +75,29 @@ static int Lua_GetModName( lua_State* L )
 
 static int Lua_GetSetting( lua_State* L )
 {
-    luaL_checkstring( L, 1 );
-    lua_pushnumber( L, 0 );
+    const char* name = luaL_checkstring( L, 1 );
+    ModSetting setting;
+    if( ModLoaderLua::GetInstance().GetSetting( name, setting ) )
+    {
+        if( strcasecmp( setting.type.c_str(), "TickBox" ) == 0 )
+        {
+            bool val = ( setting.currentValue == "1" || strcasecmp( setting.currentValue.c_str(), "true" ) == 0 );
+            lua_pushboolean( L, val ? 1 : 0 );
+            return 1;
+        }
+        else if( strcasecmp( setting.type.c_str(), "Number" ) == 0 )
+        {
+            double val = atof( setting.currentValue.c_str() );
+            lua_pushnumber( L, val );
+            return 1;
+        }
+        else
+        {
+            lua_pushstring( L, setting.currentValue.c_str() );
+            return 1;
+        }
+    }
+    lua_pushnil( L );
     return 1;
 }
 
@@ -82,6 +105,98 @@ static int Lua_GetSettings( lua_State* L )
 {
     lua_newtable( L );
     return 1;
+}
+
+static int Lua_Exists( lua_State* L )
+{
+    const char* path = luaL_checkstring( L, 1 );
+    bool checkFile = lua_isboolean( L, 2 ) ? ( lua_toboolean( L, 2 ) != 0 ) : true;
+    bool checkDir = lua_isboolean( L, 3 ) ? ( lua_toboolean( L, 3 ) != 0 ) : false;
+
+    std::string fullPath = ModLoaderLua::GetInstance().ResolveGameDataPath( path );
+    struct stat st;
+    if( stat( fullPath.c_str(), &st ) == 0 )
+    {
+        bool isDir = S_ISDIR( st.st_mode );
+        bool isReg = S_ISREG( st.st_mode );
+        if( checkFile && !checkDir )
+        {
+            lua_pushboolean( L, isReg ? 1 : 0 );
+        }
+        else if( checkDir && !checkFile )
+        {
+            lua_pushboolean( L, isDir ? 1 : 0 );
+        }
+        else
+        {
+            lua_pushboolean( L, 1 );
+        }
+    }
+    else
+    {
+        lua_pushboolean( L, 0 );
+    }
+    return 1;
+}
+
+static int Lua_SetConditionalParameter( lua_State* L )
+{
+    return 0;
+}
+
+static int Lua_GetMainMod( lua_State* L )
+{
+    lua_pushstring( L, ModLoaderLua::GetInstance().GetActiveModName().c_str() );
+    return 1;
+}
+
+static int Lua_GetModTitle( lua_State* L )
+{
+    const std::string& title = ModLoaderLua::GetInstance().GetModTitle();
+    lua_pushstring( L, !title.empty() ? title.c_str() : ModLoaderLua::GetInstance().GetActiveModName().c_str() );
+    return 1;
+}
+
+static int Lua_GetModVersion( lua_State* L )
+{
+    const std::string& ver = ModLoaderLua::GetInstance().GetModVersion();
+    lua_pushstring( L, !ver.empty() ? ver.c_str() : "1.0.0" );
+    return 1;
+}
+
+static int Lua_DirectoryRecursiveCreate( lua_State* L )
+{
+    const char* dir = luaL_checkstring( L, 1 );
+    if( dir != NULL )
+    {
+        std::string fullDir = ModLoaderLua::GetInstance().ResolveGameDataPath( dir );
+        ModLoaderLua::GetInstance().EnsureDirectoryExists( fullDir );
+    }
+    lua_pushboolean( L, 1 );
+    return 1;
+}
+
+static int Lua_GetTime( lua_State* L )
+{
+    lua_pushnumber( L, (double)time( NULL ) );
+    return 1;
+}
+
+static int Lua_GetLauncherVersion( lua_State* L )
+{
+    lua_pushstring( L, "1.26" );
+    return 1;
+}
+
+static int Lua_IsTesting( lua_State* L )
+{
+    lua_pushboolean( L, 0 );
+    return 1;
+}
+
+static int Lua_Pause( lua_State* L )
+{
+    return 0;
 }
 
 static int Lua_IsHackLoaded( lua_State* L )
@@ -364,28 +479,139 @@ void ModLoaderLua::Reset()
     m_activeModPath.clear();
     m_gameDirPath.clear();
     m_cacheDir.clear();
+    m_modTitle.clear();
+    m_modVersion.clear();
+    m_settings.clear();
+}
+
+bool ModLoaderLua::GetSetting( const std::string& name, ModSetting& outSetting ) const
+{
+    for( auto it = m_settings.begin(); it != m_settings.end(); ++it )
+    {
+        if( strcasecmp( it->first.c_str(), name.c_str() ) == 0 )
+        {
+            outSetting = it->second;
+            return true;
+        }
+    }
+    return false;
+}
+
+void ModLoaderLua::ParseMetaIni( const std::string& metaPath )
+{
+    std::ifstream file( metaPath.c_str() );
+    if( !file.is_open() ) return;
+
+    std::string line;
+    std::string currentSection;
+    std::map<std::string, std::string> currentSectionKeys;
+
+    auto finishSection = [this, &currentSection, &currentSectionKeys]()
+    {
+        if( strcasecmp( currentSection.c_str(), "Setting" ) == 0 )
+        {
+            if( currentSectionKeys.find( "Name" ) != currentSectionKeys.end() )
+            {
+                ModSetting s;
+                s.name = currentSectionKeys["Name"];
+                s.type = currentSectionKeys["Type"];
+                if( currentSectionKeys.find( "Default" ) != currentSectionKeys.end() )
+                {
+                    s.defaultValue = currentSectionKeys["Default"];
+                }
+                else
+                {
+                    s.defaultValue = ( strcasecmp( s.type.c_str(), "TickBox" ) == 0 ) ? "0" : "";
+                }
+                s.currentValue = s.defaultValue;
+                m_settings[s.name] = s;
+                MOD_LOGI("[ModLoaderLua] Setting '%s' (type: %s, default: %s)",
+                         s.name.c_str(), s.type.c_str(), s.defaultValue.c_str());
+            }
+        }
+        else if( strcasecmp( currentSection.c_str(), "Miscellaneous" ) == 0 )
+        {
+            if( currentSectionKeys.find( "Title" ) != currentSectionKeys.end() )
+            {
+                m_modTitle = currentSectionKeys["Title"];
+            }
+            if( currentSectionKeys.find( "Version" ) != currentSectionKeys.end() )
+            {
+                m_modVersion = currentSectionKeys["Version"];
+            }
+        }
+        currentSectionKeys.clear();
+    };
+
+    while( std::getline( file, line ) )
+    {
+        size_t f = line.find_first_not_of( " \t\r\n" );
+        if( f == std::string::npos ) continue;
+        size_t l = line.find_last_not_of( " \t\r\n" );
+        std::string trimmed = line.substr( f, l - f + 1 );
+        if( trimmed.empty() || trimmed[0] == ';' || trimmed[0] == '#' ) continue;
+
+        if( trimmed.front() == '[' && trimmed.back() == ']' )
+        {
+            finishSection();
+            currentSection = trimmed.substr( 1, trimmed.size() - 2 );
+        }
+        else
+        {
+            size_t eq = trimmed.find( '=' );
+            if( eq != std::string::npos )
+            {
+                std::string k = trimmed.substr( 0, eq );
+                std::string v = trimmed.substr( eq + 1 );
+                size_t kf = k.find_first_not_of( " \t\r\n" );
+                size_t kl = k.find_last_not_of( " \t\r\n" );
+                if( kf != std::string::npos ) k = k.substr( kf, kl - kf + 1 );
+                size_t vf = v.find_first_not_of( " \t\r\n" );
+                size_t vl = v.find_last_not_of( " \t\r\n" );
+                if( vf != std::string::npos ) v = v.substr( vf, vl - vf + 1 );
+                currentSectionKeys[k] = v;
+            }
+        }
+    }
+    finishSection();
 }
 
 void ModLoaderLua::AddPathHandler( const std::string& pattern, const std::string& scriptPath )
 {
-    std::string normPattern = pattern;
-    for( size_t i = 0; i < normPattern.size(); ++i )
+    std::string normPattern;
+    normPattern.reserve( pattern.size() );
+    for( size_t i = 0; i < pattern.size(); ++i )
     {
-        if( normPattern[i] == '\\' ) normPattern[i] = '/';
+        char c = pattern[i];
+        if( c == '\\' ) c = '/';
+        if( c == '/' && !normPattern.empty() && normPattern.back() == '/' ) continue;
+        normPattern.push_back( c );
     }
-    while( !normPattern.empty() && ( normPattern[0] == '/' || normPattern[0] == '.' ) )
+    while( !normPattern.empty() && ( normPattern.front() == '/' || normPattern.front() == '.' ) )
     {
         normPattern.erase( 0, 1 );
     }
-
-    std::string normScript = scriptPath;
-    for( size_t i = 0; i < normScript.size(); ++i )
+    while( !normPattern.empty() && normPattern.back() == '/' )
     {
-        if( normScript[i] == '\\' ) normScript[i] = '/';
+        normPattern.pop_back();
     }
-    while( !normScript.empty() && ( normScript[0] == '/' || normScript[0] == '.' ) )
+
+    std::string normScript;
+    normScript.reserve( scriptPath.size() );
+    for( size_t i = 0; i < scriptPath.size(); ++i )
+    {
+        char c = scriptPath[i];
+        if( c == '\\' ) c = '/';
+        if( c == '/' && !normScript.empty() && normScript.back() == '/' ) continue;
+        normScript.push_back( c );
+    }
+    while( !normScript.empty() && ( normScript.front() == '/' || normScript.front() == '.' ) )
     {
         normScript.erase( 0, 1 );
+    }
+    while( !normScript.empty() && normScript.back() == '/' )
+    {
+        normScript.pop_back();
     }
 
     ModPathHandlerRule rule;
@@ -451,6 +677,16 @@ bool ModLoaderLua::InitLuaState()
     lua_register( L, "ReadFileOffset", Lua_ReadFileOffset );
     lua_register( L, "WriteFile", Lua_WriteFile );
     lua_register( L, "PathExists", Lua_PathExists );
+    lua_register( L, "Exists", Lua_Exists );
+    lua_register( L, "SetConditionalParameter", Lua_SetConditionalParameter );
+    lua_register( L, "GetMainMod", Lua_GetMainMod );
+    lua_register( L, "GetModTitle", Lua_GetModTitle );
+    lua_register( L, "GetModVersion", Lua_GetModVersion );
+    lua_register( L, "DirectoryRecursiveCreate", Lua_DirectoryRecursiveCreate );
+    lua_register( L, "GetTime", Lua_GetTime );
+    lua_register( L, "GetLauncherVersion", Lua_GetLauncherVersion );
+    lua_register( L, "IsTesting", Lua_IsTesting );
+    lua_register( L, "Pause", Lua_Pause );
     lua_register( L, "DirectoryGetEntries", Lua_DirectoryGetEntries );
     lua_register( L, "GetFileName", Lua_GetFileName );
     lua_register( L, "GetPathParent", Lua_GetPathParent );
@@ -534,18 +770,33 @@ void ModLoaderLua::Initialize( const char* modsDir, const char* activeMod, const
 
     MOD_LOGI("[ModLoaderLua] Initialized for mod '%s' at '%s'", m_activeModName.c_str(), m_activeModPath.c_str());
 
+    // Parse Meta.ini if present before initializing Lua
+    std::string metaPath = m_activeModPath + "/Meta.ini";
+    if( access( metaPath.c_str(), R_OK ) != 0 )
+    {
+        metaPath = m_activeModPath + "/" + m_activeModName + "/Meta.ini";
+    }
+    if( access( metaPath.c_str(), R_OK ) == 0 )
+    {
+        ParseMetaIni( metaPath );
+    }
+
     InitLuaState();
     m_initialized = true;
 }
 
 std::string ModLoaderLua::ResolveGameDataPath( const std::string& path )
 {
-    std::string clean = path;
-    for( size_t i = 0; i < clean.size(); ++i )
+    std::string clean;
+    clean.reserve( path.size() );
+    for( size_t i = 0; i < path.size(); ++i )
     {
-        if( clean[i] == '\\' ) clean[i] = '/';
+        char c = path[i];
+        if( c == '\\' ) c = '/';
+        if( c == '/' && !clean.empty() && clean.back() == '/' ) continue;
+        clean.push_back( c );
     }
-    while( !clean.empty() && ( clean[0] == '/' || clean[0] == '.' ) )
+    while( !clean.empty() && ( clean.front() == '/' || clean.front() == '.' ) )
     {
         clean.erase( 0, 1 );
     }
@@ -562,6 +813,10 @@ std::string ModLoaderLua::ResolveGameDataPath( const std::string& path )
     std::string p2 = m_activeModPath + "/AdditionalFiles/" + clean;
     if( access( p2.c_str(), F_OK ) == 0 ) return p2;
 
+    // Check in active mod Resources
+    std::string pRes = m_activeModPath + "/Resources/" + clean;
+    if( access( pRes.c_str(), F_OK ) == 0 ) return pRes;
+
     // Check in active mod root
     std::string p3 = m_activeModPath + "/" + clean;
     if( access( p3.c_str(), F_OK ) == 0 ) return p3;
@@ -571,6 +826,18 @@ std::string ModLoaderLua::ResolveGameDataPath( const std::string& path )
     {
         std::string p4 = m_gameDirPath + "/" + clean;
         if( access( p4.c_str(), F_OK ) == 0 ) return p4;
+    }
+
+    // Standard storage game directories
+    const char* standardDirs[] = {
+        "/storage/emulated/0/Simpsons Hit and Run/game",
+        "/storage/emulated/0/Simpsons Hit and Run/files",
+        "/storage/emulated/0/Simpsons Hit and Run"
+    };
+    for( size_t i = 0; i < 3; i++ )
+    {
+        std::string sp = std::string( standardDirs[i] ) + "/" + clean;
+        if( access( sp.c_str(), F_OK ) == 0 ) return sp;
     }
 
     // Default to CustomFiles
@@ -591,13 +858,31 @@ bool ModLoaderLua::HandleFileRequest( const char* cleanFileName, std::string& ou
         return false;
     }
 
+    std::string normReq;
+    normReq.reserve( strlen( cleanFileName ) );
+    for( size_t i = 0; cleanFileName[i] != '\0'; ++i )
+    {
+        char c = cleanFileName[i];
+        if( c == '\\' ) c = '/';
+        if( c == '/' && !normReq.empty() && normReq.back() == '/' ) continue;
+        normReq.push_back( c );
+    }
+    while( !normReq.empty() && ( normReq.front() == '/' || normReq.front() == '.' ) )
+    {
+        normReq.erase( 0, 1 );
+    }
+    while( !normReq.empty() && normReq.back() == '/' )
+    {
+        normReq.pop_back();
+    }
+
     for( size_t i = 0; i < m_rules.size(); i++ )
     {
         const ModPathHandlerRule& rule = m_rules[i];
-        if( MatchPattern( rule.pattern.c_str(), cleanFileName ) )
+        if( MatchPattern( rule.pattern.c_str(), normReq.c_str() ) )
         {
             MOD_LOGI("[ModLoaderLua] File '%s' matched PathHandler '%s' -> '%s'",
-                     cleanFileName, rule.pattern.c_str(), rule.scriptPath.c_str());
+                     normReq.c_str(), rule.pattern.c_str(), rule.scriptPath.c_str());
 
             // Resolve full script path
             std::string scriptFile = m_activeModPath + "/" + rule.scriptPath;
@@ -621,7 +906,7 @@ bool ModLoaderLua::HandleFileRequest( const char* cleanFileName, std::string& ou
             if( L == NULL ) return false;
 
             s_CurrentOutput.clear();
-            s_CurrentVirtualPath = cleanFileName;
+            s_CurrentVirtualPath = normReq;
             s_CurrentRedirection.clear();
 
             int status = luaL_dofile( L, scriptFile.c_str() );
@@ -637,7 +922,7 @@ bool ModLoaderLua::HandleFileRequest( const char* cleanFileName, std::string& ou
             if( !s_CurrentRedirection.empty() )
             {
                 std::string redirected = ResolveGameDataPath( s_CurrentRedirection );
-                MOD_LOGI("[ModLoaderLua] Handler redirected '%s' -> '%s'", cleanFileName, redirected.c_str());
+                MOD_LOGI("[ModLoaderLua] Handler redirected '%s' -> '%s'", normReq.c_str(), redirected.c_str());
                 outResolvedPath = redirected;
                 return true;
             }
@@ -645,7 +930,7 @@ bool ModLoaderLua::HandleFileRequest( const char* cleanFileName, std::string& ou
             // Check if handler called Output(...)
             if( !s_CurrentOutput.empty() )
             {
-                std::string cacheFile = m_cacheDir + "/" + cleanFileName;
+                std::string cacheFile = m_cacheDir + "/" + normReq;
                 size_t slash = cacheFile.find_last_of( "/\\" );
                 if( slash != std::string::npos )
                 {

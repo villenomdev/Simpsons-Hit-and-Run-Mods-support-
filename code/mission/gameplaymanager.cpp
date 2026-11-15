@@ -707,6 +707,10 @@ void GameplayManager::PlaceVehicleAtLocator( Vehicle* vehicle,
         {
             anyLoc = p3d::find<CarStartLocator>( "level1_carstart" );
         }
+        if( anyLoc == NULL )
+        {
+            anyLoc = p3d::find<CarStartLocator>( "level2_carstart" );
+        }
         if( anyLoc != NULL )
         {
             anyLoc->GetLocation( &pos );
@@ -839,6 +843,14 @@ void GameplayManager::PlaceVehicleAtLocatorName( Vehicle* vehicle,
             {
                 loc = p3d::find<CarStartLocator>( "level1_carstart" );
             }
+            else if( strstr( locatorName, "level2_carstart" ) != NULL )
+            {
+                loc = p3d::find<CarStartLocator>( "level1_carstart" );
+                if( loc == NULL )
+                {
+                    loc = p3d::find<CarStartLocator>( "level_carstart" );
+                }
+            }
         }
     }
     #ifndef FINAL
@@ -925,9 +937,10 @@ Vehicle* GameplayManager::AddLevelVehicle( const char* vehicleName,eCarSlots slo
     
     mVehicleSlots[slot].mp_vehicle = v;
                     
-
-    v->AddRef();
-    
+    if( v != NULL )
+    {
+        v->AddRef();
+    }
 
     return v;
 }

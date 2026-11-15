@@ -136,14 +136,27 @@ static std::string Trim( const std::string& str )
 static std::string NormalizeModPath( const std::string& p )
 {
     std::string res;
+    res.reserve( p.size() );
     for( size_t i = 0; i < p.size(); ++i )
     {
-        if( p[i] == '\\' ) res.push_back( '/' );
-        else res.push_back( p[i] );
+        char c = p[i];
+        if( c == '\\' ) c = '/';
+        if( c == '/' )
+        {
+            if( !res.empty() && res.back() == '/' )
+            {
+                continue; // collapse consecutive slashes (e.g. \\ or //)
+            }
+        }
+        res.push_back( c );
     }
-    while( !res.empty() && ( res[0] == '/' || res[0] == '.' ) )
+    while( !res.empty() && ( res.front() == '/' || res.front() == '.' ) )
     {
         res.erase( 0, 1 );
+    }
+    while( !res.empty() && res.back() == '/' )
+    {
+        res.pop_back();
     }
     return res;
 }
@@ -484,7 +497,8 @@ void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* ac
     {
         const char* effDir = ModManager::GetInstance().GetEffectiveActiveModDir();
         const char* dirToUse = ( effDir && effDir[0] != '\0' ) ? effDir : s_ModsDirectory;
-        ModLoaderLua::GetInstance().Initialize( dirToUse, s_ActiveMod, s_FallbackGameDir );
+        const char* baseGameDir = ( s_MainGameDir[0] != '\0' ) ? s_MainGameDir : s_FallbackGameDir;
+        ModLoaderLua::GetInstance().Initialize( dirToUse, s_ActiveMod, baseGameDir );
     }
     LOGI("[Mods] Config updated: enabled=%d, dir='%s', active_mod='%s', safe_frontend=%d",
          s_ModsEnabled ? 1 : 0, s_ModsDirectory, s_ActiveMod, s_SafeFrontend ? 1 : 0);
@@ -903,12 +917,7 @@ static bool FindModFile( const char* rawFileName, char* outPath, size_t outSize 
     EnsureModIniLoaded();
 
     // Normalize slashes and remove leading drive or slashes
-    std::string cleanName( rawFileName );
-    std::replace( cleanName.begin(), cleanName.end(), '\\', '/' );
-    while( !cleanName.empty() && ( cleanName[0] == '/' || cleanName[0] == '.' ) )
-    {
-        cleanName.erase( 0, 1 );
-    }
+    std::string cleanName = NormalizeModPath( rawFileName );
 
     if( cleanName.empty() )
     {
@@ -1005,12 +1014,7 @@ static bool CheckFallbackGamePath( const char* rawFileName, char* outPath, size_
         return false;
     }
 
-    std::string cleanName( rawFileName );
-    std::replace( cleanName.begin(), cleanName.end(), '\\', '/' );
-    while( !cleanName.empty() && ( cleanName[0] == '/' || cleanName[0] == '.' ) )
-    {
-        cleanName.erase( 0, 1 );
-    }
+    std::string cleanName = NormalizeModPath( rawFileName );
 
     if( cleanName.empty() )
     {

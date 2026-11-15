@@ -913,6 +913,10 @@ Character* CharacterManager::AddCharacter( CharacterType type, const char* chara
 Character* CharacterManager::AddCharacterDeferedLoad( CharacterType type, const char* characterName, const char* modelName, const char* choreoPuppet, const char* location)
 {
     Character* c = AddCharacter(type, characterName, "npd", "npd", location);
+    if( c == NULL )
+    {
+        return NULL;
+    }
 
     unsigned characterIndex = INVALID_LOAD;
 
@@ -925,7 +929,10 @@ Character* CharacterManager::AddCharacterDeferedLoad( CharacterType type, const 
         }
     }
 
-    rAssert(characterIndex != INVALID_LOAD);
+    if( characterIndex == INVALID_LOAD )
+    {
+        return c;
+    }
 
     strcpy(mRealModelNames[ characterIndex ], modelName);
     strcpy(mRealAnimNames[ characterIndex ], choreoPuppet);
