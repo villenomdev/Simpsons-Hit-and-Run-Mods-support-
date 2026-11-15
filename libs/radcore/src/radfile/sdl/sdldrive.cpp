@@ -540,6 +540,93 @@ void radSdlDriveSetModsConfig( bool enabled, const char* modsDir, const char* ac
          s_ModsEnabled ? 1 : 0, s_ModsDirectory, s_ActiveMod, s_SafeFrontend ? 1 : 0);
 }
 
+static bool ResolveCaseInsensitiveRecursive( const std::string& currentDir, const std::string& remainingPath, std::string& outPath )
+{
+    if( remainingPath.empty() )
+    {
+        struct stat st;
+        if( stat( currentDir.c_str(), &st ) == 0 && !S_ISDIR( st.st_mode ) )
+        {
+            outPath = currentDir;
+            return true;
+        }
+        return false;
+    }
+
+    size_t nextSlash = remainingPath.find( '/' );
+    std::string part = ( nextSlash == std::string::npos ) ? remainingPath : remainingPath.substr( 0, nextSlash );
+    std::string nextRemaining = ( nextSlash == std::string::npos ) ? "" : remainingPath.substr( nextSlash + 1 );
+    if( part.empty() || part == "." )
+    {
+        return ResolveCaseInsensitiveRecursive( currentDir, nextRemaining, outPath );
+    }
+
+    // 1. Direct exact match check first
+    std::string exactPath = currentDir + "/" + part;
+    struct stat st;
+    if( stat( exactPath.c_str(), &st ) == 0 )
+    {
+        if( nextRemaining.empty() )
+        {
+            if( !S_ISDIR( st.st_mode ) )
+            {
+                outPath = exactPath;
+                return true;
+            }
+        }
+        else if( S_ISDIR( st.st_mode ) )
+        {
+            if( ResolveCaseInsensitiveRecursive( exactPath, nextRemaining, outPath ) )
+            {
+                return true;
+            }
+        }
+    }
+
+    // 2. Scan directory for case-insensitive matches (collect all candidates for backtracking)
+    DIR* dir = opendir( currentDir.c_str() );
+    if( !dir ) return false;
+
+    std::vector<std::string> candidates;
+    struct dirent* entry;
+    while( ( entry = readdir( dir ) ) != NULL )
+    {
+        if( strcmp( entry->d_name, "." ) == 0 || strcmp( entry->d_name, ".." ) == 0 ) continue;
+        if( strcasecmp( entry->d_name, part.c_str() ) == 0 )
+        {
+            // Avoid repeating exactPath if we already tested it and it failed
+            if( exactPath != ( currentDir + "/" + entry->d_name ) )
+            {
+                candidates.push_back( entry->d_name );
+            }
+        }
+    }
+    closedir( dir );
+
+    for( size_t i = 0; i < candidates.size(); ++i )
+    {
+        std::string candPath = currentDir + "/" + candidates[i];
+        if( nextRemaining.empty() )
+        {
+            struct stat cst;
+            if( stat( candPath.c_str(), &cst ) == 0 && !S_ISDIR( cst.st_mode ) )
+            {
+                outPath = candPath;
+                return true;
+            }
+        }
+        else
+        {
+            if( ResolveCaseInsensitiveRecursive( candPath, nextRemaining, outPath ) )
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 static bool CheckModCandidate( const char* basePath, const char* subPath, const char* cleanFileName, char* outPath, size_t outSize )
 {
     char candidate[1024];
@@ -564,7 +651,8 @@ static bool CheckModCandidate( const char* basePath, const char* subPath, const 
         }
     }
 
-    // 2. Fallback: Case-insensitive path resolution for Android Linux filesystem
+    // 2. Fallback: Multi-candidate recursive backtracking resolution for Android Linux filesystem
+    // Handles case collisions like sibling dirs "Missions" vs "missions" in mods
     std::string current = basePath;
     if( subPath && subPath[0] != '\0' )
     {
@@ -572,54 +660,10 @@ static bool CheckModCandidate( const char* basePath, const char* subPath, const 
         current += subPath;
     }
 
-    std::string rel = cleanFileName;
-    size_t start = 0;
-    while( start < rel.size() )
+    std::string resolved;
+    if( ResolveCaseInsensitiveRecursive( current, cleanFileName, resolved ) )
     {
-        size_t next = rel.find( '/', start );
-        std::string part = ( next == std::string::npos ) ? rel.substr( start ) : rel.substr( start, next - start );
-        start = ( next == std::string::npos ) ? rel.size() : next + 1;
-        if( part.empty() || part == "." ) continue;
-
-        std::string nextCandidate = current + "/" + part;
-        struct stat st;
-        if( stat( nextCandidate.c_str(), &st ) == 0 )
-        {
-            current = nextCandidate;
-            continue;
-        }
-
-        // Search directory current case-insensitively
-        DIR* dir = opendir( current.c_str() );
-        if( !dir )
-        {
-            return false;
-        }
-
-        struct dirent* entry;
-        bool found = false;
-        while( ( entry = readdir( dir ) ) != NULL )
-        {
-            if( strcasecmp( entry->d_name, part.c_str() ) == 0 )
-            {
-                current += "/";
-                current += entry->d_name;
-                found = true;
-                break;
-            }
-        }
-        closedir( dir );
-
-        if( !found )
-        {
-            return false;
-        }
-    }
-
-    struct stat finalSt;
-    if( stat( current.c_str(), &finalSt ) == 0 && !S_ISDIR( finalSt.st_mode ) )
-    {
-        strncpy( outPath, current.c_str(), outSize - 1 );
+        strncpy( outPath, resolved.c_str(), outSize - 1 );
         outPath[ outSize - 1 ] = '\0';
         return true;
     }

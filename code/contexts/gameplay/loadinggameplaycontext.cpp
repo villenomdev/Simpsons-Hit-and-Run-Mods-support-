@@ -189,7 +189,7 @@ void LoadingGameplayContext::OnUpdate( unsigned int elapsedTime )
         {
             if( GetGameFlow()->GetNextContext() != CONTEXT_GAMEPLAY && GetGameFlow()->GetCurrentContext() != CONTEXT_GAMEPLAY )
             {
-                if( !GetLoadingManager()->IsLoading() )
+                if( !GetLoadingManager()->IsLoading() && GetVehicleCentral()->GetCurrentVehicleUnderConstruction() == NULL )
                 {
                     GameLog_Recordf("LoadingGameplayContext", "Failsafe: forced transition to CONTEXT_GAMEPLAY after %u ticks", m_loadingElapsedTicks);
                     GetGameFlow()->SetContext( CONTEXT_GAMEPLAY );

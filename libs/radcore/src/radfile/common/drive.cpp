@@ -188,8 +188,7 @@ void radDrive::Service( void )
         else
         {
             pEnd = *ppCallback;
-            CompletionCallbackRequest* pCallback = ( CompletionCallbackRequest* ) (*ppCallback)->m_Next;
-            ppCallback = &pCallback;
+            ppCallback = ( CompletionCallbackRequest** ) &( (*ppCallback)->m_Next );
         }
     }
 

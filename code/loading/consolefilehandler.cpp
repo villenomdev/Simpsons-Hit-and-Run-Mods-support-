@@ -13,10 +13,15 @@
 // System Includes
 //========================================
 #include <string.h>
+#include <stdio.h>
 // Pure 3D
 #include <p3d/utility.hpp>
 // Foundation Tech
 #include <raddebug.hpp>
+
+#ifdef RAD_ANDROID
+extern bool radSdlDriveFindModFile( const char* rawFileName, char* outPath, size_t outSize );
+#endif
 
 //========================================
 // Project Includes
@@ -96,6 +101,41 @@ void ConsoleFileHandler::LoadFile
     rAssert( pCallback );
 
     mpCallback = pCallback;
+
+#ifdef RAD_ANDROID
+    // Fast path: if this script belongs to an active mod, load directly & synchronously
+    char modPath[1024];
+    if( radSdlDriveFindModFile( filename, modPath, sizeof(modPath) ) )
+    {
+        FILE* fp = fopen( modPath, "rb" );
+        if( fp != NULL )
+        {
+            fseek( fp, 0, SEEK_END );
+            long fileSize = ftell( fp );
+            fseek( fp, 0, SEEK_SET );
+            if( fileSize >= 0 )
+            {
+                MEMTRACK_PUSH_GROUP( "ConsoleFileHandler" );
+                char* buffer = new( GMA_TEMP ) char[ fileSize + 1 ];
+                size_t bytesRead = fread( buffer, 1, fileSize, fp );
+                fclose( fp );
+                buffer[ bytesRead ] = '\0';
+
+                GetConsole()->Evaluate( buffer, filename );
+
+                delete[]( GMA_TEMP, buffer );
+                MEMTRACK_POP_GROUP( "ConsoleFileHandler" );
+
+                mAsyncLoadState = DONE;
+                AddRef();
+                pCallback->OnLoadFileComplete( pUserData );
+                Release();
+                return;
+            }
+            fclose( fp );
+        }
+    }
+#endif
 
     // by default, use FTT IRadFiles
     //

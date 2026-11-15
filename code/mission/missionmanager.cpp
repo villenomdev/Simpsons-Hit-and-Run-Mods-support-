@@ -533,8 +533,14 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
                     s_missionLoadingWatchdog++;
                 }
 
-                if( s_missionLoadingWatchdog > 450 ) // ~7.5 seconds without queue progress
+                if( s_missionLoadingWatchdog > 900 ) // ~15 seconds without queue progress
                 {
+                    if( GetLoadingManager()->IsLoading() )
+                    {
+                        // Still actively loading, give LoadingManager more time
+                        s_missionLoadingWatchdog = 0;
+                        break;
+                    }
                     rReleasePrintf("[WARN ] [MissionManager] STATE_MISSION_LOADING timeout (%d ticks without progress). IsLoading=%d, VehicleUnderConstruction=%p. Force advancing to STATE_MISSION_INIT.\n",
                                    s_missionLoadingWatchdog,
                                    (int)GetLoadingManager()->IsLoading(),
@@ -574,8 +580,14 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
                     s_missionInitingWatchdog++;
                 }
 
-                if( s_missionInitingWatchdog > 450 ) // ~7.5 seconds without queue progress
+                if( s_missionInitingWatchdog > 900 ) // ~15 seconds without queue progress
                 {
+                    if( GetLoadingManager()->IsLoading() || GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
+                    {
+                        // Still actively loading or building vehicle, do not force advance to gameplay
+                        s_missionInitingWatchdog = 0;
+                        break;
+                    }
                     rReleasePrintf("[WARN ] [MissionManager] STATE_MISSION_INITING timeout (%d ticks without progress). IsLoading=%d, VehicleUnderConstruction=%p. Force advancing to STATE_MISSION_DYNALOAD.\n",
                                    s_missionInitingWatchdog,
                                    (int)GetLoadingManager()->IsLoading(),
@@ -787,6 +799,13 @@ MEMTRACK_PUSH_GROUP( "MissionManager - Loading" );
         }
     case STATE_MISSION_START:
         {
+            // CRITICAL: NEVER advance to gameplay while LoadingManager is still actively loading
+            // or a vehicle is still under construction!
+            if( GetLoadingManager()->IsLoading() || GetVehicleCentral()->GetCurrentVehicleUnderConstruction() != NULL )
+            {
+                break;
+            }
+
             if( GetCurrentMission()->IsSundayDrive() )
             {
 

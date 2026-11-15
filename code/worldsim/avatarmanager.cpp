@@ -174,14 +174,21 @@ void AvatarManager::EnterGame( void )
 
         // Single player set up.
         //
-        pCharacter->SetInCar( false );
-        mAvatarArray[ i ]->SetVehicle( (Vehicle*)0 );
-        mAvatarArray[ i ]->SetCameraTargetToCharacter( true );
-        mAvatarArray[ i ]->SetOutOfCarController( );
+        if( pCharacter != NULL )
+        {
+            pCharacter->SetInCar( false );
+            mAvatarArray[ i ]->SetVehicle( (Vehicle*)0 );
+            mAvatarArray[ i ]->SetCameraTargetToCharacter( true );
+            mAvatarArray[ i ]->SetOutOfCarController( );
+        }
+        else
+        {
+            rReleasePrintf("AvatarManager: Warning, pCharacter is NULL for player %d\n", i);
+        }
 
         //Chuck Adding support for loading of the last used skin for the level
 
-        if ( pVehicle )
+        if ( pVehicle != NULL && pCharacter != NULL )
         {
             // Hack.  MS8.
             // Position the character near the vehicle.
