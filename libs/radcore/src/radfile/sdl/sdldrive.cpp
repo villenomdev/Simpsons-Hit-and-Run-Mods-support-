@@ -993,7 +993,7 @@ static bool SearchModInDirectory( const char* modsDir,
         // Check <mods_dir>/<folder>/AdditionalFiles/<file>
         char addSub[512];
         snprintf( addSub, sizeof(addSub), "%s/AdditionalFiles", folder );
-        if( CheckModCandidate( modsDir, addSub, cname, addCand, sizeof(addCand) ) )
+        if( CheckModCandidate( modsDir, addSub, cname, outPath, outSize ) )
         {
             return true;
         }
