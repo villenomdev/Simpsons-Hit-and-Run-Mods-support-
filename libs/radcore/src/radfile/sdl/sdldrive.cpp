@@ -302,6 +302,20 @@ static bool CheckPathRedirection( const char* cleanFileName, std::string& outRed
 
         if( hopFound && nextTarget != current )
         {
+            // If the original requested file is a .rsd (Radical Sound Data), but nextTarget is non-RSD (e.g. .ogg, .mp3)
+            // radsound cannot decode non-RSD formats. Bypassing such redirection prevents sound engine freeze/deadlock.
+            auto EndsWithCaseInsensitive = [](const std::string& str, const std::string& suffix) -> bool {
+                if (str.length() < suffix.length()) return false;
+                return strcasecmp(str.c_str() + str.length() - suffix.length(), suffix.c_str()) == 0;
+            };
+
+            if (EndsWithCaseInsensitive(norm, ".rsd") && !EndsWithCaseInsensitive(nextTarget, ".rsd"))
+            {
+                LOGI("[Mods] Bypassing redirection '%s' -> '%s' (non-RSD sound format not supported by radsound)",
+                     current.c_str(), nextTarget.c_str());
+                break;
+            }
+
             current = nextTarget;
             anyRedirected = true;
         }

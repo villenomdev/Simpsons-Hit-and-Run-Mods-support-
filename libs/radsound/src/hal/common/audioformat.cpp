@@ -189,6 +189,11 @@ unsigned int radSoundHalAudioFormat::FramesToSamples( unsigned int frames )
 
 unsigned int radSoundHalAudioFormat::FramesToBytes( unsigned int frames )
 {
+    if ( m_FrameSizeInBytes <= 0.0f )
+    {
+        return 0;
+    }
+
     float fFrames = ::radSoundUIntToFloat( frames );
 
     float fBytes = fFrames * m_FrameSizeInBytes;
@@ -200,6 +205,11 @@ unsigned int radSoundHalAudioFormat::FramesToBytes( unsigned int frames )
 
 unsigned int radSoundHalAudioFormat::BytesToFrames( unsigned int bytes )
 {
+    if ( m_FrameSizeInBytes <= 0.0f )
+    {
+        return 0;
+    }
+
     float fBytes = ::radSoundUIntToFloat( bytes );
 
     float fFrames = fBytes / m_FrameSizeInBytes;

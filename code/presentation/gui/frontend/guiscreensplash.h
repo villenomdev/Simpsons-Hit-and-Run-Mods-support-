@@ -65,6 +65,7 @@ private:
 
     unsigned int m_demoLoopTime;
     unsigned int m_elapsedTime;
+    unsigned int m_loadingWaitTime;
 
     static short s_demoPlaybackToggle;
 

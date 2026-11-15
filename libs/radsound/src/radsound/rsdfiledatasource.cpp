@@ -147,6 +147,15 @@ void radSoundRsdFileDataSource::GetFramesAsync
 	IRadSoundHalDataSourceCallback * pIRshdsc
 )
 {
+    if ( m_StateInfo.m_State == StateInfo::FILE_ERROR || m_refIRadFile == NULL || m_FramesLeftInFile == 0 || m_refIRadSoundHalAudioFormat == NULL )
+    {
+        if ( pIRshdsc != NULL )
+        {
+            pIRshdsc->OnDataSourceFramesLoaded( 0 );
+        }
+        return;
+    }
+
     rAssert( m_StateInfo.m_State == StateInfo::IDLE );
 	rAssert( pIRshdsc != NULL );
 
@@ -323,6 +332,28 @@ void radSoundRsdFileDataSource::_StateReadingHeader( void )
 
 	m_StateInfo.m_ReadingHeaderInfo.m_pRadSoundHalFileHeader->ConvertToPlatformEndian( );
 
+    IRadSoundHalAudioFormat::Encoding encoding =
+        m_StateInfo.m_ReadingHeaderInfo.m_pRadSoundHalFileHeader->GetEncodingFromChars(
+            m_StateInfo.m_ReadingHeaderInfo.m_pRadSoundHalFileHeader->m_SoundDataType );
+
+    if ( encoding == (IRadSoundHalAudioFormat::Encoding) 0xFFFFFFFF )
+    {
+        rTunePrintf( "radSoundRsdFileDataSource: [%s] invalid RSD header! SoundDataType '%c%c%c%c'\n",
+            fileName,
+            m_StateInfo.m_ReadingHeaderInfo.m_pRadSoundHalFileHeader->m_SoundDataType[0],
+            m_StateInfo.m_ReadingHeaderInfo.m_pRadSoundHalFileHeader->m_SoundDataType[1],
+            m_StateInfo.m_ReadingHeaderInfo.m_pRadSoundHalFileHeader->m_SoundDataType[2],
+            m_StateInfo.m_ReadingHeaderInfo.m_pRadSoundHalFileHeader->m_SoundDataType[3] );
+
+        ::radMemoryFreeAligned( RADMEMORY_ALLOC_TEMP, m_StateInfo.m_ReadingHeaderInfo.m_pRadSoundHalFileHeader );
+        m_StateInfo.m_ReadingHeaderInfo.m_pRadSoundHalFileHeader = NULL;
+
+        m_StateInfo.m_State = StateInfo::FILE_ERROR;
+        m_FramesLeftInFile = 0;
+        m_refIRadFile = NULL;
+        return;
+    }
+
 	// Create a new audio format object
 
 	m_refIRadSoundHalAudioFormat = ::radSoundHalAudioFormatCreate( GetThisAllocator( ) );
@@ -340,6 +371,14 @@ void radSoundRsdFileDataSource::_StateReadingHeader( void )
 
 void radSoundRsdFileDataSource::InitFile( void )
 {
+    if ( m_refIRadSoundHalAudioFormat == NULL || m_refIRadSoundHalAudioFormat->GetFrameSizeInBytes( ) <= 0.0f )
+    {
+        m_StateInfo.m_State = StateInfo::FILE_ERROR;
+        m_FramesLeftInFile = 0;
+        m_refIRadFile = NULL;
+        return;
+    }
+
 	// Figure out where to start reading in the file
 
 	unsigned int initialPlaybackOffsetInBytes =

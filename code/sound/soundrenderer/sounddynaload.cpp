@@ -784,26 +784,47 @@ void daSoundDynaLoadManager::ServiceOncePerFrame( void )
     }
 
     // Call any completion callbacks
-    if
-    (
-        ( m_pCompletionCallback != NULL ) &&
-        ( daSoundDynaLoadRegion::GetNumPendingSwaps( ) == 0 )
-    )
+    static unsigned int s_pendingSwapWatchdog = 0;
+    if ( m_pCompletionCallback != NULL )
     {
-        //
-        // Store the callback separately before using, since the callback
-        // may lead to another sound load
-        //
-        callback = m_pCompletionCallback;
-        m_pCompletionCallback = NULL;
-        m_pCompletionUserData = NULL;
+        if ( daSoundDynaLoadRegion::GetNumPendingSwaps( ) == 0 )
+        {
+            s_pendingSwapWatchdog = 0;
+            callback = m_pCompletionCallback;
+            m_pCompletionCallback = NULL;
+            m_pCompletionUserData = NULL;
 
-        callback->OnDynaLoadOperationsComplete
-        (
-            m_pCompletionUserData
-        );
+            callback->OnDynaLoadOperationsComplete
+            (
+                m_pCompletionUserData
+            );
 
-        callback->Release();
+            callback->Release();
+        }
+        else
+        {
+            s_pendingSwapWatchdog++;
+            if ( s_pendingSwapWatchdog > 300 ) // ~5 seconds at 60 FPS
+            {
+                rReleasePrintf("daSoundDynaLoadManager: Pending swaps timed out (%u remaining)! Forcing completion callback.\n",
+                               daSoundDynaLoadRegion::GetNumPendingSwaps());
+                s_pendingSwapWatchdog = 0;
+                callback = m_pCompletionCallback;
+                m_pCompletionCallback = NULL;
+                m_pCompletionUserData = NULL;
+
+                callback->OnDynaLoadOperationsComplete
+                (
+                    m_pCompletionUserData
+                );
+
+                callback->Release();
+            }
+        }
+    }
+    else
+    {
+        s_pendingSwapWatchdog = 0;
     }
 }
 

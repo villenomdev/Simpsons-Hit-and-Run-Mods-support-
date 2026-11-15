@@ -428,7 +428,13 @@ void radSoundStreamPlayer::ServiceStateMachine( void )
 
         if ( m_QueueingSubState == Queueing_WaitingForDataSourceToInitialize )
         {
-		    if ( m_xIRadSoundHalDataSource->GetState( ) != IRadSoundHalDataSource::Initialized )
+		    if ( m_xIRadSoundHalDataSource->GetState( ) == IRadSoundHalDataSource::Error )
+		    {
+                rTunePrintf( "radSoundStreamPlayer: DataSource failed to initialize! Setting state to NoSource\n" );
+                m_QueueingSubState = Queueing_None;
+                SetState( IRadSoundStreamPlayer::NoSource );
+		    }
+		    else if ( m_xIRadSoundHalDataSource->GetState( ) != IRadSoundHalDataSource::Initialized )
 		    {
 			    // Do nothing, the data source is still not initialized
 		    }

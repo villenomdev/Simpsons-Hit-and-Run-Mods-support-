@@ -66,7 +66,8 @@ CGuiScreenSplash::CGuiScreenSplash
     m_pMenu( NULL ),
     m_pressStart( NULL ),
     m_demoLoopTime( SPLASH_SCREEN_DEMO_WAIT_TIME ),
-    m_elapsedTime( 0 )
+    m_elapsedTime( 0 ),
+    m_loadingWaitTime( 0 )
 {
     // Retrieve the Scrooby drawing elements.
     //
@@ -161,6 +162,8 @@ void CGuiScreenSplash::HandleMessage
         {
             case GUI_MSG_UPDATE:
             {
+                m_loadingWaitTime += param1;
+
                 if( !m_pMenu->HasSelectionBeenMade() )
                 {
                     m_elapsedTime += param1;
@@ -199,7 +202,15 @@ void CGuiScreenSplash::HandleMessage
                     }
                 }
 
-                if( m_pressStart != NULL && !GetLoadingManager()->IsLoading() ) // sound loading is done
+                bool loadingDone = !GetLoadingManager()->IsLoading();
+                if( !loadingDone && m_loadingWaitTime > 4000 )
+                {
+                    // Failsafe: if background sound or mod loading took longer than 4s,
+                    // enable Press Start so player is never trapped on Loading.
+                    loadingDone = true;
+                }
+
+                if( m_pressStart != NULL && loadingDone ) // sound loading is done or timed out
                 {
                     rAssert( m_pMenu != NULL );
 
@@ -231,9 +242,9 @@ void CGuiScreenSplash::HandleMessage
 
                 GetGuiSystem()->SetPrimaryController((int)param1);
 
-                if( GetLoadingManager()->IsLoading() )
+                if( GetLoadingManager()->IsLoading() && m_loadingWaitTime < 4000 )
                 {
-                    // ignore start input until all loading is done
+                    // ignore start input until all loading is done (or failsafe timeout)
                     //
                     return;
                 }

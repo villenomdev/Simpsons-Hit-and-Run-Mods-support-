@@ -143,6 +143,10 @@ enum_stream_graph_state stream_graph_state( stream_graph * p_sg )
         {
             p_sg->state = stream_graph_state_queued;
         }
+        else if ( p_sg->p_stream_player->GetState( ) == IRadSoundStreamPlayer::NoSource )
+        {
+            p_sg->state = stream_graph_state_dequeued;
+        }
         else
         {
             rAssert( p_sg->p_stream_player->GetState( ) == IRadSoundStreamPlayer::Queueing );
