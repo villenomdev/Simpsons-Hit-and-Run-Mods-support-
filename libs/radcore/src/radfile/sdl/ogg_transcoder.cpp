@@ -128,3 +128,222 @@ bool TranscodeOggToRsd( const char* oggPath, const char* rsdPath )
 
     return true;
 }
+
+bool TranscodeWavToRsd( const char* wavPath, const char* rsdPath )
+{
+    if( wavPath == NULL || rsdPath == NULL || wavPath[0] == '\0' || rsdPath[0] == '\0' )
+    {
+        return false;
+    }
+
+    struct stat st;
+    if( stat( rsdPath, &st ) == 0 && st.st_size > 2048 )
+    {
+        return true;
+    }
+
+    FILE* in = fopen( wavPath, "rb" );
+    if( !in )
+    {
+        LOGE( "[WavTranscoder] Failed to open WAV file: '%s'\n", wavPath );
+        return false;
+    }
+
+    char riffHeader[12];
+    if( fread( riffHeader, 1, 12, in ) != 12 ||
+        memcmp( riffHeader, "RIFF", 4 ) != 0 ||
+        memcmp( riffHeader + 8, "WAVE", 4 ) != 0 )
+    {
+        LOGE( "[WavTranscoder] Invalid WAV header: '%s'\n", wavPath );
+        fclose( in );
+        return false;
+    }
+
+    unsigned short audioFormat = 0;
+    unsigned short numChannels = 0;
+    unsigned int sampleRate = 0;
+    unsigned short bitsPerSample = 0;
+    bool fmtFound = false;
+
+    long dataOffset = -1;
+    unsigned int dataBytes = 0;
+
+    char chunkHdr[8];
+    while( fread( chunkHdr, 1, 8, in ) == 8 )
+    {
+        unsigned int chunkSize = *(unsigned int*)(chunkHdr + 4);
+        if( memcmp( chunkHdr, "fmt ", 4 ) == 0 )
+        {
+            if( chunkSize >= 16 )
+            {
+                unsigned char fmtBuf[16];
+                if( fread( fmtBuf, 1, 16, in ) == 16 )
+                {
+                    audioFormat = *(unsigned short*)(fmtBuf);
+                    numChannels = *(unsigned short*)(fmtBuf + 2);
+                    sampleRate = *(unsigned int*)(fmtBuf + 4);
+                    bitsPerSample = *(unsigned short*)(fmtBuf + 14);
+                    fmtFound = true;
+                    if( chunkSize > 16 )
+                    {
+                        fseek( in, chunkSize - 16, SEEK_CUR );
+                    }
+                    continue;
+                }
+            }
+        }
+        else if( memcmp( chunkHdr, "data", 4 ) == 0 )
+        {
+            dataOffset = ftell( in );
+            dataBytes = chunkSize;
+            break;
+        }
+
+        fseek( in, chunkSize, SEEK_CUR );
+    }
+
+    if( !fmtFound || dataOffset < 0 || numChannels == 0 || sampleRate == 0 ||
+        ( audioFormat != 1 && audioFormat != 3 ) )
+    {
+        LOGE( "[WavTranscoder] Unsupported or missing fmt/data chunks in '%s' (format=%u, ch=%u, rate=%u, bits=%u)\n",
+              wavPath, audioFormat, numChannels, sampleRate, bitsPerSample );
+        fclose( in );
+        return false;
+    }
+
+    short* pcmSamples = NULL;
+    size_t outDataBytes = 0;
+
+    fseek( in, dataOffset, SEEK_SET );
+
+    if( audioFormat == 1 && bitsPerSample == 16 )
+    {
+        pcmSamples = (short*)malloc( dataBytes );
+        if( !pcmSamples )
+        {
+            fclose( in );
+            return false;
+        }
+        if( fread( pcmSamples, 1, dataBytes, in ) != dataBytes )
+        {
+            free( pcmSamples );
+            fclose( in );
+            return false;
+        }
+        outDataBytes = dataBytes;
+    }
+    else if( audioFormat == 1 && bitsPerSample == 8 )
+    {
+        unsigned char* u8Buf = (unsigned char*)malloc( dataBytes );
+        if( !u8Buf ) { fclose( in ); return false; }
+        if( fread( u8Buf, 1, dataBytes, in ) != dataBytes ) { free( u8Buf ); fclose( in ); return false; }
+        pcmSamples = (short*)malloc( dataBytes * sizeof(short) );
+        if( !pcmSamples ) { free( u8Buf ); fclose( in ); return false; }
+        for( size_t i = 0; i < dataBytes; ++i )
+        {
+            pcmSamples[i] = (short)( ( (int)u8Buf[i] - 128 ) << 8 );
+        }
+        free( u8Buf );
+        outDataBytes = dataBytes * sizeof(short);
+    }
+    else if( audioFormat == 3 && bitsPerSample == 32 )
+    {
+        size_t floatCount = dataBytes / sizeof(float);
+        float* fBuf = (float*)malloc( dataBytes );
+        if( !fBuf ) { fclose( in ); return false; }
+        if( fread( fBuf, 1, dataBytes, in ) != dataBytes ) { free( fBuf ); fclose( in ); return false; }
+        pcmSamples = (short*)malloc( floatCount * sizeof(short) );
+        if( !pcmSamples ) { free( fBuf ); fclose( in ); return false; }
+        for( size_t i = 0; i < floatCount; ++i )
+        {
+            float v = fBuf[i];
+            if( v > 1.0f ) v = 1.0f;
+            else if( v < -1.0f ) v = -1.0f;
+            pcmSamples[i] = (short)( v * 32767.0f );
+        }
+        free( fBuf );
+        outDataBytes = floatCount * sizeof(short);
+    }
+    else
+    {
+        LOGE( "[WavTranscoder] Unsupported bitsPerSample: %u in '%s'\n", bitsPerSample, wavPath );
+        fclose( in );
+        return false;
+    }
+
+    fclose( in );
+
+    EnsureParentDirectory( rsdPath );
+    FILE* out = fopen( rsdPath, "wb" );
+    if( !out )
+    {
+        LOGE( "[WavTranscoder] Failed to open output RSD for writing: '%s'\n", rsdPath );
+        free( pcmSamples );
+        return false;
+    }
+
+    Rsd4PcmHeader hdr;
+    memset( &hdr, 0, sizeof(hdr) );
+    memcpy( hdr.m_RsdDataTag, "RSD4", 4 );
+    memcpy( hdr.m_SoundDataType, "PCM ", 4 );
+    hdr.m_Channels = (unsigned int)numChannels;
+    hdr.m_BitResolution = 16;
+    hdr.m_SamplingRate = sampleRate;
+
+    if( fwrite( &hdr, 1, sizeof(hdr), out ) != sizeof(hdr) ||
+        fwrite( pcmSamples, 1, outDataBytes, out ) != outDataBytes )
+    {
+        LOGE( "[WavTranscoder] Failed writing RSD to '%s'\n", rsdPath );
+        fclose( out );
+        unlink( rsdPath );
+        free( pcmSamples );
+        return false;
+    }
+
+    fclose( out );
+    free( pcmSamples );
+
+    LOGI( "[WavTranscoder] Successfully transcoded: '%s' -> '%s' (%u ch, %u Hz, %zu bytes)\n",
+          wavPath, rsdPath, numChannels, sampleRate, sizeof(hdr) + outDataBytes );
+    return true;
+}
+
+bool TranscodeAudioToRsd( const char* srcAudioPath, const char* rsdPath )
+{
+    if( srcAudioPath == NULL || rsdPath == NULL ) return false;
+
+    size_t len = strlen( srcAudioPath );
+    if( len > 4 && strcasecmp( srcAudioPath + len - 4, ".ogg" ) == 0 )
+    {
+        return TranscodeOggToRsd( srcAudioPath, rsdPath );
+    }
+    if( len > 4 && strcasecmp( srcAudioPath + len - 4, ".wav" ) == 0 )
+    {
+        return TranscodeWavToRsd( srcAudioPath, rsdPath );
+    }
+
+    // Header probe fallback
+    FILE* f = fopen( srcAudioPath, "rb" );
+    if( f )
+    {
+        char magic[4];
+        if( fread( magic, 1, 4, f ) == 4 )
+        {
+            fclose( f );
+            if( memcmp( magic, "OggS", 4 ) == 0 )
+            {
+                return TranscodeOggToRsd( srcAudioPath, rsdPath );
+            }
+            if( memcmp( magic, "RIFF", 4 ) == 0 )
+            {
+                return TranscodeWavToRsd( srcAudioPath, rsdPath );
+            }
+        }
+        else
+        {
+            fclose( f );
+        }
+    }
+
+    return false;
+}

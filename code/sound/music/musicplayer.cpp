@@ -70,14 +70,117 @@ struct InteriorIDEntry
 
 static InteriorIDEntry interiorNameTable[] =
 {
-    { 0, "KwikEMart",             MEVENT_INTERIOR_KWIK_E_MART },
-    { 0, "SpringfieldElementary", MEVENT_INTERIOR_SCHOOL      },
-    { 0, "SimpsonsHouse",         MEVENT_INTERIOR_HOUSE       },
-    { 0, "Krustylu",              MEVENT_INTERIOR_HOUSE       },
-    { 0, "dmv",                   MEVENT_INTERIOR_DMV         }
+    { 0, "KwikEMart",              MEVENT_INTERIOR_KWIK_E_MART },
+    { 0, "SpringfieldElementary",  MEVENT_INTERIOR_SCHOOL      },
+    { 0, "SimpsonsHouse",          MEVENT_INTERIOR_HOUSE       },
+    { 0, "Krustylu",               MEVENT_INTERIOR_HOUSE       },
+    { 0, "dmv",                    MEVENT_INTERIOR_DMV         },
+    { 0, "LegitimateBusinessClub", MEVENT_INTERIOR_HOUSE       }
 };
 
 static int interiorTableLength = sizeof( interiorNameTable ) / sizeof( InteriorIDEntry );
+
+extern bool radSdlDriveFindModFile( const char* rawFileName, char* outPath, size_t outSize );
+
+static void loadCustomAudioSupport()
+{
+    char xmlPath[1024];
+    if( !radSdlDriveFindModFile( "CustomAudioSupport.xml", xmlPath, sizeof(xmlPath) ) )
+    {
+        return;
+    }
+
+    FILE* fp = fopen( xmlPath, "r" );
+    if( !fp )
+    {
+        return;
+    }
+
+    GameLog_Recordf( "MusicPlayer", "Loading custom audio support: '%s'", xmlPath );
+
+    char line[512];
+    int currentLevelIdx = -1;
+
+    while( fgets( line, sizeof(line), fp ) )
+    {
+        char* p = line;
+        while( *p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' ) p++;
+        if( *p == '\0' || ( *p == '<' && p[1] == '!' ) ) continue;
+
+        // <Interior Name="LegitimateBusinessClub" MusicEventIndex="19"/>
+        if( strstr( p, "<Interior" ) )
+        {
+            char name[128] = {0};
+            int eventIdx = -1;
+            char* nameAttr = strstr( p, "Name=\"" );
+            if( nameAttr )
+            {
+                sscanf( nameAttr + 6, "%127[^\"]", name );
+            }
+            char* eventAttr = strstr( p, "MusicEventIndex=\"" );
+            if( eventAttr )
+            {
+                eventIdx = atoi( eventAttr + 17 );
+            }
+            if( name[0] != '\0' )
+            {
+                for( int i = 0; i < interiorTableLength; ++i )
+                {
+                    if( strcasecmp( interiorNameTable[i].name, name ) == 0 )
+                    {
+                        if( eventIdx >= 0 && eventIdx < MEVENT_END_STANDARD_EVENTS )
+                        {
+                            interiorNameTable[i].musicEvent = static_cast<MusicEventList>( eventIdx );
+                        }
+                        break;
+                    }
+                }
+                GameLog_Recordf( "MusicPlayer", "Custom Interior: Name='%s', MusicEventIndex=%d", name, eventIdx );
+            }
+        }
+        // <Level Index="0" StartAmbienceEventIndex="7">
+        else if( strstr( p, "<Level" ) )
+        {
+            char* idxAttr = strstr( p, "Index=\"" );
+            if( idxAttr )
+            {
+                currentLevelIdx = atoi( idxAttr + 7 );
+            }
+            char* ambAttr = strstr( p, "StartAmbienceEventIndex=\"" );
+            if( ambAttr && currentLevelIdx >= 0 && currentLevelIdx < NUM_LEVELS )
+            {
+                int ambIdx = atoi( ambAttr + 25 );
+                GameLog_Recordf( "MusicPlayer", "Level %d StartAmbienceEventIndex: %d", currentLevelIdx, ambIdx );
+            }
+        }
+        // <Mission Index="0" StartAmbienceEventIndex="4" />
+        else if( strstr( p, "<Mission" ) )
+        {
+            int msnIdx = -1;
+            char* idxAttr = strstr( p, "Index=\"" );
+            if( idxAttr )
+            {
+                msnIdx = atoi( idxAttr + 7 );
+            }
+            char* ambAttr = strstr( p, "StartAmbienceEventIndex=\"" );
+            if( ambAttr && currentLevelIdx >= 0 && currentLevelIdx < NUM_LEVELS && msnIdx >= 0 && msnIdx < NUM_STARTING_MISSIONS )
+            {
+                int ambIdx = atoi( ambAttr + 25 );
+                if( ambIdx >= 0 && ambIdx < AEVENT_NUM_EVENTS )
+                {
+                    startingAmbiences[currentLevelIdx][msnIdx] = static_cast<AmbientEventList>( ambIdx );
+                    GameLog_Recordf( "MusicPlayer", "Level %d Mission %d StartAmbienceEvent: %d", currentLevelIdx, msnIdx, ambIdx );
+                }
+            }
+        }
+        else if( strstr( p, "</Level>" ) )
+        {
+            currentLevelIdx = -1;
+        }
+    }
+
+    fclose( fp );
+}
 
 //
 // Tables for mapping music/ambience events to indices into radMusic scripts
@@ -405,6 +508,11 @@ MusicPlayer::MusicPlayer( Sound::IDaSoundTuner& tuner ) :
     // Fill in the script tables with name keys
     //
     initializeTableNameKeys();
+
+    //
+    // Load custom audio support overrides from mod (e.g. CustomAudioSupport.xml)
+    //
+    loadCustomAudioSupport();
 }
 
 //==============================================================================
@@ -707,7 +815,8 @@ void MusicPlayer::HandleEvent( EventEnum id, void* pEventData )
             {
                 // switching to interior
                 interiorIndex = calculateInteriorIndex( GetInteriorManager()->GetInterior() );
-                turnAmbienceOn( AEVENT_INTERIOR_KWIK_E_MART + interiorIndex );
+                int ambIndex = ( interiorIndex < 5 ) ? interiorIndex : 2;
+                turnAmbienceOn( AEVENT_INTERIOR_KWIK_E_MART + ambIndex );
                 if( !musicLockedOnForStage() )
                 {
                     TriggerMusicEvent( interiorNameTable[interiorIndex].musicEvent );
@@ -2395,5 +2504,6 @@ void MusicPlayer::triggerCurrentInteriorAmbience()
     int interiorIndex;
 
     interiorIndex = calculateInteriorIndex( GetInteriorManager()->GetInterior() );
-    turnAmbienceOn( AEVENT_INTERIOR_KWIK_E_MART + interiorIndex );
+    int ambIndex = ( interiorIndex < 5 ) ? interiorIndex : 2;
+    turnAmbienceOn( AEVENT_INTERIOR_KWIK_E_MART + ambIndex );
 }

@@ -33,6 +33,7 @@
 #include <memory/srrmemory.h>
 #include <loading/loadingmanager.h>
 #include <loading/soundfilehandler.h>
+#include <debug/gamelog.h>
 
 #include <sound/soundrenderer/idasoundtuner.h>
 #include <sound/soundrenderer/soundresource.h>
@@ -1637,46 +1638,38 @@ void daSoundRenderingManager::LoadModSoundScripts( void )
         { "car_tune.spt", SC_INGAME, true }
     };
 
+    static const char* s_searchPrefixes[] = {
+        "sound/scripts/%s",
+        "scripts/cars/sound/scripts/%s",
+        "scripts/sound/scripts/%s",
+        "sound/%s",
+        "scripts/%s",
+        "scripts/cars/%s",
+        "CustomSounds/%s",
+        "%s"
+    };
+
     for( size_t i = 0; i < sizeof(s_targets)/sizeof(s_targets[0]); ++i )
     {
         const ModScriptTarget& target = s_targets[i];
         char foundPath[1024];
         bool found = false;
 
-        char candidate[256];
-        snprintf( candidate, sizeof(candidate), "sound/scripts/%s", target.scriptName );
-        if( radSdlDriveFindModFile( candidate, foundPath, sizeof(foundPath) ) )
+        for( size_t p = 0; p < sizeof(s_searchPrefixes)/sizeof(s_searchPrefixes[0]); ++p )
         {
-            found = true;
-        }
-        else
-        {
-            snprintf( candidate, sizeof(candidate), "scripts/cars/sound/scripts/%s", target.scriptName );
+            char candidate[256];
+            snprintf( candidate, sizeof(candidate), s_searchPrefixes[p], target.scriptName );
             if( radSdlDriveFindModFile( candidate, foundPath, sizeof(foundPath) ) )
             {
                 found = true;
-            }
-            else
-            {
-                snprintf( candidate, sizeof(candidate), "scripts/sound/scripts/%s", target.scriptName );
-                if( radSdlDriveFindModFile( candidate, foundPath, sizeof(foundPath) ) )
-                {
-                    found = true;
-                }
-                else
-                {
-                    snprintf( candidate, sizeof(candidate), "%s", target.scriptName );
-                    if( radSdlDriveFindModFile( candidate, foundPath, sizeof(foundPath) ) )
-                    {
-                        found = true;
-                    }
-                }
+                break;
             }
         }
 
         if( found )
         {
             LOGI("[Sound] Found mod sound script '%s' at '%s'", target.scriptName, foundPath);
+            GameLog_Recordf("Sound", "Found mod sound script '%s' at '%s'", target.scriptName, foundPath);
             ParseSoundScript( foundPath, target.cluster );
         }
     }
@@ -1688,10 +1681,12 @@ void daSoundRenderingManager::ParseSoundScript( const char* filePath, SoundClust
     if( !fp )
     {
         LOGE( "[Sound] Failed to open script: '%s'", filePath );
+        GameLog_Recordf( "Sound", "Failed to open script: '%s'", filePath );
         return;
     }
 
     LOGI( "[Sound] Parsing script: '%s' (cluster=%d)", filePath, cluster );
+    GameLog_Recordf( "Sound", "Parsing script: '%s' (cluster=%d)", filePath, cluster );
 
     char lineBuf[1024];
     daSoundResourceData* currentResource = NULL;
@@ -1910,6 +1905,15 @@ void daSoundRenderingManager::ParseSoundScript( const char* filePath, SoundClust
             } else if( strncmp( p, "SetDownshiftDamperSize", 22 ) == 0 ) {
                 char* paren = strchr( p, '(' );
                 if( paren ) currentCarTune->SetDownshiftDamperSize( (float)atof( paren + 1 ) );
+            } else if( strncmp( p, "SetBackupClipName", 17 ) == 0 ) {
+                std::string s = ExtractQuoted( p );
+                if( !s.empty() ) currentCarTune->SetBackupClipName( s.c_str() );
+            } else if( strncmp( p, "SetClipRPM", 10 ) == 0 ) {
+                char* paren = strchr( p, '(' );
+                if( paren ) currentCarTune->SetClipRPM( (float)atof( paren + 1 ) );
+            } else if( strncmp( p, "SetNumberOfGears", 16 ) == 0 ) {
+                char* paren = strchr( p, '(' );
+                if( paren ) currentCarTune->SetNumberOfGears( (unsigned int)atoi( paren + 1 ) );
             }
             continue;
         }
@@ -1917,6 +1921,7 @@ void daSoundRenderingManager::ParseSoundScript( const char* filePath, SoundClust
 
     fclose( fp );
     LOGI( "[Sound] Finished parsing script: '%s'", filePath );
+    GameLog_Recordf( "Sound", "Finished parsing script: '%s'", filePath );
 }
 
 } // Sound Namespace

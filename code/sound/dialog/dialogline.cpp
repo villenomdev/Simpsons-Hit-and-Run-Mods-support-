@@ -154,7 +154,14 @@ CharacterTableEntry characterTable[] =
     { 0, "Vm1", 0, "traffic1" },
     { 0, "Vm2", 0, "traffic2" },
     { 0, "Vm3", 0, "traffic3" },
-    { 0, "Vm4", 0, "traffic4" }
+    { 0, "Vm4", 0, "traffic4" },
+    // Mod custom character codes (e.g. Cops in Springfield / CustomDialogueCharacterCodes.ini)
+    { 0, "Tony", 0, "fattony" },
+    { 0, "Legs", 0, "legs" },
+    { 0, "Knt", 0, "brockman" },
+    { 0, "blnk", 0, "gil" },
+    { 0, "Lor", 0, "loren" },
+    { 0, "BusD", 0, "busdriver" }
 };
 
 static unsigned int characterTableLength = sizeof( characterTable ) / sizeof( CharacterTableEntry );

@@ -216,6 +216,11 @@ void PositionalSoundPlayer::SetPositionCarrier( PositionCarrier& movingSound )
     m_positionCarrier = &movingSound;
 }
 
+void PositionalSoundPlayer::UnsetPositionCarrier()
+{
+    m_positionCarrier = NULL;
+}
+
 //=============================================================================
 // PositionalSoundPlayer::SetParameters
 //=============================================================================

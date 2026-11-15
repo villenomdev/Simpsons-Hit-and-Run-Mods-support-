@@ -316,8 +316,8 @@ static bool CheckPathRedirection( const char* cleanFileName, std::string& outRed
 
         if( hopFound && nextTarget != current )
         {
-            // If the original requested file is a .rsd (Radical Sound Data), but nextTarget is non-RSD (e.g. .ogg, .mp3)
-            // radsound cannot decode non-RSD formats. Bypassing such redirection prevents sound engine freeze/deadlock.
+            // If the original requested file is a .rsd (Radical Sound Data), but nextTarget is non-RSD (e.g. .ogg, .wav)
+            // radsound cannot decode non-RSD formats. Redirecting extension to .rsd allows FindModFile to transcode on demand.
             auto EndsWithCaseInsensitive = [](const std::string& str, const std::string& suffix) -> bool {
                 if (str.length() < suffix.length()) return false;
                 return strcasecmp(str.c_str() + str.length() - suffix.length(), suffix.c_str()) == 0;
@@ -325,14 +325,16 @@ static bool CheckPathRedirection( const char* cleanFileName, std::string& outRed
 
             if (EndsWithCaseInsensitive(norm, ".rsd") && !EndsWithCaseInsensitive(nextTarget, ".rsd"))
             {
-                if (EndsWithCaseInsensitive(nextTarget, ".ogg"))
+                if (EndsWithCaseInsensitive(nextTarget, ".ogg") || EndsWithCaseInsensitive(nextTarget, ".wav"))
                 {
-                    // Target is .ogg for an RSD request. Convert nextTarget extension to .rsd so FindModFile can locate the .ogg and transcode on demand
-                    std::string rsdTarget = nextTarget.substr(0, nextTarget.length() - 4) + ".rsd";
-                    LOGI("[Mods] Redirecting RSD to OGG target as RSD: '%s' -> '%s' (will transcode on demand)",
+                    // Target is .ogg or .wav for an RSD request. Convert nextTarget extension to .rsd so FindModFile can locate the audio file and transcode on demand
+                    size_t extDot = nextTarget.rfind('.');
+                    std::string rsdTarget = nextTarget.substr(0, extDot) + ".rsd";
+                    LOGI("[Mods] Redirecting RSD to audio target as RSD: '%s' -> '%s' (will transcode on demand)",
                          current.c_str(), rsdTarget.c_str());
                     nextTarget = rsdTarget;
-                    hopFound = true;
+                    current = nextTarget;
+                    anyRedirected = true;
                     break;
                 }
                 else
@@ -829,8 +831,18 @@ static bool CheckModCandidateWithQuirks( const char* modsDir, const char* subFol
         return true;
     }
 
+    // Quirk 0: Strip "sound/dialog/" if requested path begins with it
+    if( strncasecmp( cname, "sound/dialog/", 13 ) == 0 )
+    {
+        const char* stripped = cname + 13;
+        if( CheckModCandidateWithQuirks( modsDir, subFolder, stripped, outPath, outSize ) )
+        {
+            return true;
+        }
+    }
+
     // Quirk 1: mod audio files (or scripts) mistakenly placed under scripts/cars/sound/ or scripts/sound/
-    if( strncmp( cname, "sound/", 6 ) == 0 )
+    if( strncasecmp( cname, "sound/", 6 ) == 0 )
     {
         std::string quirkPath = "scripts/cars/" + std::string( cname );
         if( CheckModCandidate( modsDir, subFolder, quirkPath.c_str(), outPath, outSize ) )
@@ -842,17 +854,39 @@ static bool CheckModCandidateWithQuirks( const char* modsDir, const char* subFol
         {
             return true;
         }
+        std::string quirkPath3 = "scripts/cars/sound/" + std::string( cname + 6 );
+        if( CheckModCandidate( modsDir, subFolder, quirkPath3.c_str(), outPath, outSize ) )
+        {
+            return true;
+        }
+        std::string quirkPath4 = std::string( cname + 6 );
+        if( CheckModCandidate( modsDir, subFolder, quirkPath4.c_str(), outPath, outSize ) )
+        {
+            return true;
+        }
     }
 
-    // Quirk 2: character voice lines placed under scripts/<char>/
+    // Quirk 2: character voice lines placed under scripts/<char>/ or <char>/
     const char* slash = strchr( cname, '/' );
     if( slash != NULL )
     {
         std::string charDir( cname, slash - cname );
-        if( charDir == "wiggum" || charDir == "homer" || charDir == "bart" || charDir == "lisa" || charDir == "marge" || charDir == "apu" || charDir == "krusty" || charDir == "quimby" )
+        if( strcasecmp( charDir.c_str(), "wiggum" ) == 0 ||
+            strcasecmp( charDir.c_str(), "homer" ) == 0 ||
+            strcasecmp( charDir.c_str(), "bart" ) == 0 ||
+            strcasecmp( charDir.c_str(), "lisa" ) == 0 ||
+            strcasecmp( charDir.c_str(), "marge" ) == 0 ||
+            strcasecmp( charDir.c_str(), "apu" ) == 0 ||
+            strcasecmp( charDir.c_str(), "krusty" ) == 0 ||
+            strcasecmp( charDir.c_str(), "quimby" ) == 0 )
         {
             std::string quirkPath = "scripts/" + std::string( cname );
             if( CheckModCandidate( modsDir, subFolder, quirkPath.c_str(), outPath, outSize ) )
+            {
+                return true;
+            }
+            std::string quirkPath2 = "scripts/cars/" + std::string( cname );
+            if( CheckModCandidate( modsDir, subFolder, quirkPath2.c_str(), outPath, outSize ) )
             {
                 return true;
             }
@@ -884,21 +918,51 @@ static bool CheckModCandidateWithQuirks( const char* modsDir, const char* subFol
         }
     }
 
+    // Quirk 5: conversations placed under scripts/cars/sound/dialog/ or scripts/cars/
+    if( strncasecmp( cname, "conversations/", 14 ) == 0 )
+    {
+        std::string quirkPath = "scripts/cars/sound/dialog/" + std::string( cname );
+        if( CheckModCandidate( modsDir, subFolder, quirkPath.c_str(), outPath, outSize ) )
+        {
+            return true;
+        }
+        std::string quirkPath2 = "scripts/cars/" + std::string( cname );
+        if( CheckModCandidate( modsDir, subFolder, quirkPath2.c_str(), outPath, outSize ) )
+        {
+            return true;
+        }
+    }
+
     return false;
 }
 
-static bool CheckModCandidateWithOgg( const char* modsDir, const char* subFolder, const char* cname, char* outPath, size_t outSize )
+static bool CheckModCandidateWithAudio( const char* modsDir, const char* subFolder, const char* cname, char* outPath, size_t outSize )
 {
-    if( CheckModCandidateWithQuirks( modsDir, subFolder, cname, outPath, outSize ) )
+    size_t len = strlen( cname );
+    bool isRsd = ( len > 4 && strcasecmp( cname + len - 4, ".rsd" ) == 0 );
+    bool isOgg = ( len > 4 && strcasecmp( cname + len - 4, ".ogg" ) == 0 );
+    bool isWav = ( len > 4 && strcasecmp( cname + len - 4, ".wav" ) == 0 );
+
+    if( !isRsd && !isOgg && !isWav )
     {
-        return true;
+        // Non-audio file, normal lookup
+        return CheckModCandidateWithQuirks( modsDir, subFolder, cname, outPath, outSize );
     }
 
-    // If requesting a .rsd file that does not exist in the mod, check if a .ogg version exists and transcode on demand
-    size_t len = strlen( cname );
-    if( len > 4 && strcasecmp( cname + len - 4, ".rsd" ) == 0 )
+    std::string baseWithoutExt = std::string( cname, len - 4 );
+
+    // 1. If requesting RSD, check if .rsd already exists
+    if( isRsd )
     {
-        std::string oggName = std::string( cname, len - 4 ) + ".ogg";
+        if( CheckModCandidateWithQuirks( modsDir, subFolder, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+    }
+
+    // 2. Check for .ogg candidate (transcode to .rsd on demand)
+    {
+        std::string oggName = baseWithoutExt + ".ogg";
         char foundOgg[1024];
         if( CheckModCandidateWithQuirks( modsDir, subFolder, oggName.c_str(), foundOgg, sizeof(foundOgg) ) )
         {
@@ -913,12 +977,48 @@ static bool CheckModCandidateWithOgg( const char* modsDir, const char* subFolder
                 rsdTarget += ".rsd";
             }
 
-            if( TranscodeOggToRsd( foundOgg, rsdTarget.c_str() ) )
+            if( TranscodeAudioToRsd( foundOgg, rsdTarget.c_str() ) )
             {
                 strncpy( outPath, rsdTarget.c_str(), outSize - 1 );
                 outPath[ outSize - 1 ] = '\0';
                 return true;
             }
+        }
+    }
+
+    // 3. Check for .wav candidate (transcode to .rsd on demand)
+    {
+        std::string wavName = baseWithoutExt + ".wav";
+        char foundWav[1024];
+        if( CheckModCandidateWithQuirks( modsDir, subFolder, wavName.c_str(), foundWav, sizeof(foundWav) ) )
+        {
+            std::string rsdTarget = foundWav;
+            size_t extDot = rsdTarget.rfind( '.' );
+            if( extDot != std::string::npos )
+            {
+                rsdTarget = rsdTarget.substr( 0, extDot ) + ".rsd";
+            }
+            else
+            {
+                rsdTarget += ".rsd";
+            }
+
+            if( TranscodeAudioToRsd( foundWav, rsdTarget.c_str() ) )
+            {
+                strncpy( outPath, rsdTarget.c_str(), outSize - 1 );
+                outPath[ outSize - 1 ] = '\0';
+                return true;
+            }
+        }
+    }
+
+    // 4. If requested was .ogg or .wav, check if a matching .rsd exists as fallback
+    if( isOgg || isWav )
+    {
+        std::string rsdName = baseWithoutExt + ".rsd";
+        if( CheckModCandidateWithQuirks( modsDir, subFolder, rsdName.c_str(), outPath, outSize ) )
+        {
+            return true;
         }
     }
 
@@ -949,7 +1049,11 @@ static bool SearchModInDirectory( const char* modsDir,
         const char* effDir = ModManager::GetInstance().GetEffectiveActiveModDir();
         if( effDir != NULL && effDir[0] != '\0' )
         {
-            if( CheckModCandidateWithOgg( effDir, "CustomFiles", cname, outPath, outSize ) )
+            if( CheckModCandidateWithAudio( effDir, "CustomFiles", cname, outPath, outSize ) )
+            {
+                return true;
+            }
+            if( CheckModCandidateWithAudio( effDir, "CustomSounds", cname, outPath, outSize ) )
             {
                 return true;
             }
@@ -958,7 +1062,7 @@ static bool SearchModInDirectory( const char* modsDir,
             {
                 return MergeAndServeAdditionalFile( effDir, cname, addCand, outPath, outSize );
             }
-            if( CheckModCandidateWithOgg( effDir, NULL, cname, outPath, outSize ) )
+            if( CheckModCandidateWithAudio( effDir, NULL, cname, outPath, outSize ) )
             {
                 return true;
             }
@@ -967,12 +1071,20 @@ static bool SearchModInDirectory( const char* modsDir,
         // 1a. Check <mods_dir>/<active_mod>/CustomFiles/<file> (LMLM format)
         char sub[512];
         snprintf( sub, sizeof(sub), "%s/CustomFiles", s_ActiveMod );
-        if( CheckModCandidateWithOgg( modsDir, sub, cname, outPath, outSize ) )
+        if( CheckModCandidateWithAudio( modsDir, sub, cname, outPath, outSize ) )
         {
             return true;
         }
 
-        // 1b. Check <mods_dir>/<active_mod>/AdditionalFiles/<file>
+        // 1b. Check <mods_dir>/<active_mod>/CustomSounds/<file>
+        char sndSub[512];
+        snprintf( sndSub, sizeof(sndSub), "%s/CustomSounds", s_ActiveMod );
+        if( CheckModCandidateWithAudio( modsDir, sndSub, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+
+        // 1c. Check <mods_dir>/<active_mod>/AdditionalFiles/<file>
         char addSub[512];
         snprintf( addSub, sizeof(addSub), "%s/AdditionalFiles", s_ActiveMod );
         char addCand[1024];
@@ -983,8 +1095,8 @@ static bool SearchModInDirectory( const char* modsDir,
             return MergeAndServeAdditionalFile( modDir, cname, addCand, outPath, outSize );
         }
 
-        // 1c. Check <mods_dir>/<active_mod>/<file>
-        if( CheckModCandidateWithOgg( modsDir, s_ActiveMod, cname, outPath, outSize ) )
+        // 1d. Check <mods_dir>/<active_mod>/<file>
+        if( CheckModCandidateWithAudio( modsDir, s_ActiveMod, cname, outPath, outSize ) )
         {
             return true;
         }
@@ -995,7 +1107,13 @@ static bool SearchModInDirectory( const char* modsDir,
     }
 
     // 2. Check root of mods_directory with CustomFiles
-    if( CheckModCandidateWithOgg( modsDir, "CustomFiles", cname, outPath, outSize ) )
+    if( CheckModCandidateWithAudio( modsDir, "CustomFiles", cname, outPath, outSize ) )
+    {
+        return true;
+    }
+
+    // 2b. Check root of mods_directory with CustomSounds
+    if( CheckModCandidateWithAudio( modsDir, "CustomSounds", cname, outPath, outSize ) )
     {
         return true;
     }
@@ -1008,7 +1126,7 @@ static bool SearchModInDirectory( const char* modsDir,
     }
 
     // 4. Check root of mods_directory directly
-    if( CheckModCandidateWithOgg( modsDir, NULL, cname, outPath, outSize ) )
+    if( CheckModCandidateWithAudio( modsDir, NULL, cname, outPath, outSize ) )
     {
         return true;
     }
@@ -1032,7 +1150,9 @@ static bool SearchModInDirectory( const char* modsDir,
                 struct stat entSt;
                 if( stat( fullDir, &entSt ) == 0 && S_ISDIR( entSt.st_mode ) )
                 {
-                    if( strcasecmp( ent->d_name, "CustomFiles" ) != 0 && strcasecmp( ent->d_name, "AdditionalFiles" ) != 0 )
+                    if( strcasecmp( ent->d_name, "CustomFiles" ) != 0 &&
+                        strcasecmp( ent->d_name, "CustomSounds" ) != 0 &&
+                        strcasecmp( ent->d_name, "AdditionalFiles" ) != 0 )
                     {
                         discoveredFolders.push_back( ent->d_name );
                         LOGI("[Mods] Auto-discovered mod directory in '%s': '%s'", modsDir, ent->d_name);
@@ -1051,7 +1171,15 @@ static bool SearchModInDirectory( const char* modsDir,
         // Check <mods_dir>/<folder>/CustomFiles/<file>
         char sub[512];
         snprintf( sub, sizeof(sub), "%s/CustomFiles", folder );
-        if( CheckModCandidateWithOgg( modsDir, sub, cname, outPath, outSize ) )
+        if( CheckModCandidateWithAudio( modsDir, sub, cname, outPath, outSize ) )
+        {
+            return true;
+        }
+
+        // Check <mods_dir>/<folder>/CustomSounds/<file>
+        char sndSub[512];
+        snprintf( sndSub, sizeof(sndSub), "%s/CustomSounds", folder );
+        if( CheckModCandidateWithAudio( modsDir, sndSub, cname, outPath, outSize ) )
         {
             return true;
         }
@@ -1059,7 +1187,7 @@ static bool SearchModInDirectory( const char* modsDir,
         // Check <mods_dir>/<folder>/<folder>/CustomFiles/<file> (double folder extraction)
         char nestedSub[512];
         snprintf( nestedSub, sizeof(nestedSub), "%s/%s/CustomFiles", folder, folder );
-        if( CheckModCandidateWithOgg( modsDir, nestedSub, cname, outPath, outSize ) )
+        if( CheckModCandidateWithAudio( modsDir, nestedSub, cname, outPath, outSize ) )
         {
             return true;
         }
@@ -1081,7 +1209,7 @@ static bool SearchModInDirectory( const char* modsDir,
         }
 
         // Check <mods_dir>/<folder>/<file>
-        if( CheckModCandidateWithOgg( modsDir, folder, cname, outPath, outSize ) )
+        if( CheckModCandidateWithAudio( modsDir, folder, cname, outPath, outSize ) )
         {
             return true;
         }

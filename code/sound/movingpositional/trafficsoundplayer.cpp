@@ -179,7 +179,7 @@ void TrafficSoundPlayer::ServiceOncePerFrame()
     // Adjust pitch for vehicle speed if desired.  I'll probably need to
     // expose this for designer tuning later.
     //
-    if( IsActive() && m_tiePitchToVelocity )
+    if( IsActive() && m_tiePitchToVelocity && m_vehicle != NULL && m_vehicle->mTrafficLocomotion != NULL && TrafficManager::GetInstance() != NULL )
     {
         pitch = 0.5f + ( 0.5f * ( m_vehicle->mTrafficLocomotion->mActualSpeed / TrafficManager::GetInstance()->GetDesiredTrafficSpeed() ) );
         pitch *= m_pitchMultiplier;
@@ -266,6 +266,16 @@ void TrafficSoundPlayer::OnTimerDone( unsigned int elapsedTime, void * pUserData
         //
         rAssert( m_honkCount > 0 );
 
+        if( m_vehicle == NULL )
+        {
+            if( m_hornTimer != NULL )
+            {
+                m_hornTimer->Release();
+                m_hornTimer = NULL;
+            }
+            return;
+        }
+
         //
         // Find the settings for this positional sound first
         //
@@ -319,7 +329,10 @@ void TrafficSoundPlayer::HonkHorn()
     float diceRoll;
     float probability;
 
-    rAssert( m_vehicle != NULL );
+    if( m_vehicle == NULL )
+    {
+        return;
+    }
 
     if( m_hornTimer != NULL )
     {
@@ -404,6 +417,11 @@ void TrafficSoundPlayer::AddOverlayClip( carSoundParameters* parameters, const c
     rmt::Vector position;
 
     rAssert( parameters != NULL );
+
+    if( m_vehicle == NULL )
+    {
+        return;
+    }
 
     m_vehicleParameters = parameters;
     clipName = parameters->GetOverlayClipName();

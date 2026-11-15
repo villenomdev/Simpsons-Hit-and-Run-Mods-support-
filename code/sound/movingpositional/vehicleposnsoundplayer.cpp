@@ -149,6 +149,7 @@ void VehiclePositionalSoundPlayer::Deactivate()
     m_tiePitchToVelocity = false;
 
     m_player.Stop();
+    m_player.UnsetPositionCarrier();
 }
 
 //=============================================================================
@@ -163,10 +164,16 @@ void VehiclePositionalSoundPlayer::Deactivate()
 //=============================================================================
 void VehiclePositionalSoundPlayer::GetPosition( radSoundVector& position )
 {
-    rmt::Vector vehiclePosn;
-
-    m_vehicle->GetPosition( &vehiclePosn );
-    position.SetElements( vehiclePosn.x, vehiclePosn.y, vehiclePosn.z );
+    if( m_vehicle != NULL )
+    {
+        rmt::Vector vehiclePosn;
+        m_vehicle->GetPosition( &vehiclePosn );
+        position.SetElements( vehiclePosn.x, vehiclePosn.y, vehiclePosn.z );
+    }
+    else
+    {
+        position.SetElements( 0.0f, 0.0f, 0.0f );
+    }
 }
 
 //=============================================================================
@@ -181,10 +188,16 @@ void VehiclePositionalSoundPlayer::GetPosition( radSoundVector& position )
 //=============================================================================
 void VehiclePositionalSoundPlayer::GetVelocity( radSoundVector& velocity )
 {
-    rmt::Vector vehicleVel;
-
-    m_vehicle->GetVelocity( &vehicleVel );
-    velocity.SetElements( vehicleVel.x, vehicleVel.y, vehicleVel.z );
+    if( m_vehicle != NULL )
+    {
+        rmt::Vector vehicleVel;
+        m_vehicle->GetVelocity( &vehicleVel );
+        velocity.SetElements( vehicleVel.x, vehicleVel.y, vehicleVel.z );
+    }
+    else
+    {
+        velocity.SetElements( 0.0f, 0.0f, 0.0f );
+    }
 }
 
 //=============================================================================
@@ -230,6 +243,11 @@ bool VehiclePositionalSoundPlayer::UsesVehicle( Vehicle* car )
 //=============================================================================
 void VehiclePositionalSoundPlayer::BlowUp()
 {
+    if( m_vehicle == NULL )
+    {
+        return;
+    }
+
     IRadNameSpace* nameSpace;
     positionalSoundSettings* settings;
     rmt::Vector position;

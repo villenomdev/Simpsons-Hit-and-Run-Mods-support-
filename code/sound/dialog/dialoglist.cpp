@@ -33,6 +33,95 @@
 #include <render/Enums/RenderEnums.h>
 #include <gameflow/gameflow.h>
 #include <worldsim/character/charactermanager.h>
+#include <map>
+#include <string>
+
+extern bool radSdlDriveFindModFile( const char* rawFileName, char* outPath, size_t outSize );
+
+static std::map<tUID, tUID> s_ModOutfitMap;
+static bool s_ModOutfitMapLoaded = false;
+
+static void LoadModOutfitMap()
+{
+    if( s_ModOutfitMapLoaded ) return;
+    s_ModOutfitMapLoaded = true;
+
+    // Hardcoded mod outfits fallback (e.g. Cops in Springfield)
+    s_ModOutfitMap[tEntity::MakeUID("w_regular")] = tEntity::MakeUID("wiggum");
+    s_ModOutfitMap[tEntity::MakeUID("w_pi")] = tEntity::MakeUID("wiggum");
+    s_ModOutfitMap[tEntity::MakeUID("npdw")] = tEntity::MakeUID("wiggum");
+    s_ModOutfitMap[tEntity::MakeUID("w_snake")] = tEntity::MakeUID("wiggum");
+    s_ModOutfitMap[tEntity::MakeUID("w_refract")] = tEntity::MakeUID("wiggum");
+    s_ModOutfitMap[tEntity::MakeUID("w_dolittle")] = tEntity::MakeUID("wiggum");
+    s_ModOutfitMap[tEntity::MakeUID("w_sky")] = tEntity::MakeUID("wiggum");
+    s_ModOutfitMap[tEntity::MakeUID("w_duff")] = tEntity::MakeUID("wiggum");
+    s_ModOutfitMap[tEntity::MakeUID("l_coin")] = tEntity::MakeUID("lenny");
+    s_ModOutfitMap[tEntity::MakeUID("b_krusty")] = tEntity::MakeUID("krusty");
+    s_ModOutfitMap[tEntity::MakeUID("b_lisa")] = tEntity::MakeUID("lisa");
+    s_ModOutfitMap[tEntity::MakeUID("l_gun")] = tEntity::MakeUID("louie");
+    s_ModOutfitMap[tEntity::MakeUID("m_gun")] = tEntity::MakeUID("busm2");
+    s_ModOutfitMap[tEntity::MakeUID("r_uhoh")] = tEntity::MakeUID("ralph");
+    s_ModOutfitMap[tEntity::MakeUID("b_r_uhoh")] = tEntity::MakeUID("ralph");
+    s_ModOutfitMap[tEntity::MakeUID("b_loren")] = tEntity::MakeUID("loren");
+    s_ModOutfitMap[tEntity::MakeUID("b_busdriver")] = tEntity::MakeUID("busdriver");
+    s_ModOutfitMap[tEntity::MakeUID("b_burns")] = tEntity::MakeUID("burns");
+    s_ModOutfitMap[tEntity::MakeUID("loushop")] = tEntity::MakeUID("lou");
+    s_ModOutfitMap[tEntity::MakeUID("reward_loushop")] = tEntity::MakeUID("loushop");
+
+    // Dynamic scan for CustomDialogueCharacterCodes.ini
+    char iniPath[1024];
+    if( radSdlDriveFindModFile( "CustomDialogueCharacterCodes.ini", iniPath, sizeof(iniPath) ) )
+    {
+        FILE* fp = fopen( iniPath, "r" );
+        if( fp )
+        {
+            char line[512];
+            bool inNongeneric = false;
+            while( fgets( line, sizeof(line), fp ) )
+            {
+                char* p = line;
+                while( *p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' ) p++;
+                if( *p == '\0' || *p == ';' || *p == '#' ) continue;
+                if( *p == '[' )
+                {
+                    inNongeneric = ( strncasecmp( p, "[NongenericOutfits]", 19 ) == 0 );
+                    continue;
+                }
+                if( inNongeneric )
+                {
+                    char* eq = strchr( p, '=' );
+                    if( eq )
+                    {
+                        *eq = '\0';
+                        char* outfit = p;
+                        char* character = eq + 1;
+                        char* oEnd = outfit + strlen(outfit) - 1;
+                        while( oEnd > outfit && ( *oEnd == ' ' || *oEnd == '\t' || *oEnd == '\r' || *oEnd == '\n' ) ) { *oEnd = '\0'; oEnd--; }
+                        while( *character == ' ' || *character == '\t' ) character++;
+                        char* cEnd = character + strlen(character) - 1;
+                        while( cEnd > character && ( *cEnd == ' ' || *cEnd == '\t' || *cEnd == '\r' || *cEnd == '\n' ) ) { *cEnd = '\0'; cEnd--; }
+                        if( *outfit && *character )
+                        {
+                            s_ModOutfitMap[tEntity::MakeUID( outfit )] = tEntity::MakeUID( character );
+                        }
+                    }
+                }
+            }
+            fclose( fp );
+        }
+    }
+}
+
+static tUID LookupModOutfitUID( tUID effectiveUID )
+{
+    LoadModOutfitMap();
+    std::map<tUID, tUID>::iterator it = s_ModOutfitMap.find( effectiveUID );
+    if( it != s_ModOutfitMap.end() )
+    {
+        return it->second;
+    }
+    return static_cast<tUID>( 0 );
+}
 
 
 //******************************************************************************
@@ -1144,7 +1233,59 @@ bool DialogList::characterMatches( tUID characterUID, SelectableDialog* dialog,
                     // Is skin, map new UID
                     //
                     effectiveUID = skinDialogGroupTable[skinNameTable[i].dialogGroup].charUID;
+                    switchMade = true;
                     break;
+                }
+            }
+        }
+
+        if( !switchMade )
+        {
+            tUID modMapped = LookupModOutfitUID( effectiveUID );
+            if( modMapped != static_cast< tUID >( 0 ) )
+            {
+                effectiveUID = modMapped;
+                switchMade = true;
+            }
+            else
+            {
+                Character* charPtr = GetCharacterManager()->GetCharacterByName( effectiveUID );
+                if( charPtr != NULL )
+                {
+                    const char* modelName = GetCharacterManager()->GetModelName( charPtr );
+                    if( modelName != NULL )
+                    {
+                        if( ( modelName[0] == 'w' && modelName[1] == '_' ) || strcasecmp( modelName, "npdw" ) == 0 )
+                        {
+                            effectiveUID = tEntity::MakeUID( "wiggum" );
+                            switchMade = true;
+                        }
+                        else if( modelName[0] == 'h' && modelName[1] == '_' )
+                        {
+                            effectiveUID = tEntity::MakeUID( "homer" );
+                            switchMade = true;
+                        }
+                        else if( modelName[0] == 'b' && modelName[1] == '_' )
+                        {
+                            effectiveUID = tEntity::MakeUID( "bart" );
+                            switchMade = true;
+                        }
+                        else if( modelName[0] == 'l' && modelName[1] == '_' )
+                        {
+                            effectiveUID = tEntity::MakeUID( "lisa" );
+                            switchMade = true;
+                        }
+                        else if( modelName[0] == 'm' && modelName[1] == '_' )
+                        {
+                            effectiveUID = tEntity::MakeUID( "marge" );
+                            switchMade = true;
+                        }
+                        else if( modelName[0] == 'a' && modelName[1] == '_' )
+                        {
+                            effectiveUID = tEntity::MakeUID( "apu" );
+                            switchMade = true;
+                        }
+                    }
                 }
             }
         }
