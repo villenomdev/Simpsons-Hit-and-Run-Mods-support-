@@ -2239,7 +2239,10 @@ void Console::ExecuteScript
 //==============================================================================
 void Console::OnProcessRequestsComplete( void* pUserData )
 {
-    mpCallback->OnExecuteScriptComplete( pUserData );    
+    if ( mpCallback != NULL )
+    {
+        mpCallback->OnExecuteScriptComplete( pUserData );
+    }
 }
 
 

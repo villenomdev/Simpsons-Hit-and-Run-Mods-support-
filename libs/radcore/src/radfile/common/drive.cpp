@@ -129,16 +129,27 @@ void radDrive::AddCallback( CompletionCallbackRequest* pCallback )
 {
     Lock( );
     
+    pCallback->m_Next = NULL;
     if ( m_CallbackHead == NULL )
     {
         m_CallbackHead = pCallback;
     }
     else
     {
-        m_CallbackTail->m_Next = pCallback;
+        if ( m_CallbackTail != NULL )
+        {
+            m_CallbackTail->m_Next = pCallback;
+        }
+        else
+        {
+            CompletionCallbackRequest* curr = m_CallbackHead;
+            while ( curr->m_Next != NULL )
+            {
+                curr = ( CompletionCallbackRequest* ) curr->m_Next;
+            }
+            curr->m_Next = pCallback;
+        }
     }
-
-    pCallback->m_Next = NULL;
     m_CallbackTail = pCallback;
 
     Unlock( );
@@ -162,37 +173,29 @@ void radDrive::Service( void )
     IRadThread* pThread = ::radThreadGetActiveThread( );
 
     Lock( );
-    
-    CompletionCallbackRequest** ppCallback = &m_CallbackHead;
-    CompletionCallbackRequest*  pEnd = NULL;
+    CompletionCallbackRequest* pLocalList = m_CallbackHead;
+    m_CallbackHead = NULL;
+    m_CallbackTail = NULL;
+    Unlock( );
 
-    while ( *ppCallback != NULL )
+    while ( pLocalList != NULL )
     {
-        if ( (*ppCallback)->IsRegisteredThread( pThread ) )
-        {
-            //
-            // Take the callback off the list so it doesn't get called twice.
-            //
-            CompletionCallbackRequest* pCallback = *ppCallback;
-            *ppCallback = ( CompletionCallbackRequest* ) pCallback->m_Next;
-            
-            //
-            // Unlock for the actual callback, so we don't deadlock
-            //
-            Unlock( );
-            pCallback->callback( );
-            Lock( );
+        CompletionCallbackRequest* pCallback = pLocalList;
+        pLocalList = ( CompletionCallbackRequest* ) pCallback->m_Next;
+        pCallback->m_Next = NULL;
 
+        if ( pCallback->IsRegisteredThread( pThread ) )
+        {
+            pCallback->callback( );
             delete pCallback;
         }
         else
         {
-            pEnd = *ppCallback;
-            ppCallback = ( CompletionCallbackRequest** ) &( (*ppCallback)->m_Next );
+            AddCallback( pCallback );
         }
     }
 
-    m_CallbackTail = pEnd;
+    Lock( );
     
     //
     // Global Error handler

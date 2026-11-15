@@ -334,7 +334,7 @@ bool LoadingManager::IsLoading()
         if( req.startTime > 0 )
         {
             unsigned int elapsed = radTimeGetMilliseconds() - req.startTime;
-            if( elapsed > 8000 ) // 8 seconds per-request safety watchdog
+            if( elapsed > 15000 ) // 15 seconds per-request safety watchdog
             {
                 rReleasePrintf("LoadingManager: WATCHDOG hung request '%s' (%u ms, head=%u, tail=%u)! Forcing completion.\n",
                                req.filename, elapsed, mRequestHead, mRequestTail);

@@ -107,14 +107,17 @@ void radLoadManager::AddCallback( radLoadCallback* callback )
     if( callback )
     {
         callback->AddRef();
+        m_pMutex->Lock();
         if( !IsLoadPending() )
         {
+            m_pMutex->Unlock();
             callback->Done();
             callback->Release();
         }
         else
         {
             m_pLoadQueue->Push( callback );
+            m_pMutex->Unlock();
         }
     }
 }
@@ -370,14 +373,18 @@ void radLoadManager::Service()
         SwitchTasks();
     }
 
+    m_pMutex->Lock();
     if(!m_pCallbacks->Empty())
     {
         radLoadCallback* callback = m_pCallbacks->Pop();
+        m_pMutex->Unlock();
         callback->Done();
         callback->Release();
     }
-
-
+    else
+    {
+        m_pMutex->Unlock();
+    }
 }
 
 void radLoadManager::SetSyncLoading( bool sync )
