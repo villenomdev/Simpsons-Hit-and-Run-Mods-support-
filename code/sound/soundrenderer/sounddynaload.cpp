@@ -597,9 +597,9 @@ void daSoundDynaLoadRegion::ResetPendingSwaps( void )
                 pRegion->SetPendingSwapObject( s, NULL );
             }
         }
+        pRegion->ClearActiveSwap( );
         pRegion = pRegion->GetLinkedClassNext( );
     }
-    ClearActiveSwap( );
     s_GlobalPendingSwapCount = 0;
 }
 
