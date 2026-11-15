@@ -41,6 +41,10 @@ public:
    {
       //A pointer safe swap-out
       ASSSERT( (iIndex<mUseSize) );
+      if( iIndex < 0 || iIndex >= mUseSize || mUseSize <= 0 || mpData == NULL )
+      {
+         return;
+      }
       mSwapT = mpData[iIndex]; 
       mpData[iIndex] = mpData[mUseSize-1];
       mpData[mUseSize-1] = mSwapT;
@@ -51,6 +55,10 @@ public:
    {
       //A pointer safe swap-out
       ASSSERT( (iIndex<mUseSize) );
+      if( iIndex < 0 || iIndex >= mUseSize || mUseSize <= 0 || mpData == NULL )
+      {
+         return;
+      }
       mSwapT = mpData[iIndex]; 
       while(iIndex<mUseSize-1)
       {
@@ -65,6 +73,10 @@ public:
    {
       //A pointer safe swap-out
       ASSSERT( (iIndex1<mUseSize) && (iIndex2<mUseSize) );
+      if( iIndex1 < 0 || iIndex1 >= mUseSize || iIndex2 < 0 || iIndex2 >= mUseSize || mpData == NULL )
+      {
+         return;
+      }
       mSwapT = mpData[iIndex1]; 
       mpData[iIndex1] = mpData[iIndex2];
       mpData[iIndex2] = mSwapT;
@@ -91,6 +103,10 @@ public:
 
    void AddUse( int iCountSize )
    {
+      if( (iCountSize + mUseSize) > mSize )
+      {
+         return;
+      }
       ASSSERT( (iCountSize+mUseSize)<=mSize );
       mUseSize += iCountSize;
    }
@@ -142,12 +158,22 @@ public:
    T& operator[]( int iIndex )
    {
       ASSSERT( (iIndex < mUseSize) && (iIndex > -1));
+      if( iIndex < 0 || iIndex >= mUseSize || mpData == NULL )
+      {
+         static T s_dummyDefault = T();
+         return s_dummyDefault;
+      }
       return mpData[iIndex];
    }
    
    const T& operator[]( int iIndex )const
    {
       ASSSERT( (iIndex < mUseSize) && (iIndex > -1));
+      if( iIndex < 0 || iIndex >= mUseSize || mpData == NULL )
+      {
+         static T s_dummyDefault = T();
+         return s_dummyDefault;
+      }
       return mpData[iIndex];
    }
 
@@ -263,6 +289,10 @@ public:
    {
       //A pointer safe swap-out
       ASSSERT( (iIndex<mUseSize) );
+      if( iIndex < 0 || iIndex >= mUseSize || mUseSize <= 0 || mpData == NULL )
+      {
+         return;
+      }
       mSwapT = mpData[iIndex]; 
       mpData[iIndex] = mpData[mUseSize-1];
       mpData[mUseSize-1] = mSwapT;
@@ -273,6 +303,10 @@ public:
    {
       //A pointer safe swap-out
       ASSSERT( (iIndex<mUseSize) );
+      if( iIndex < 0 || iIndex >= mUseSize || mUseSize <= 0 || mpData == NULL )
+      {
+         return;
+      }
       mSwapT = mpData[iIndex]; 
       while(iIndex<mUseSize-1)
       {
@@ -287,6 +321,10 @@ public:
    {
       //A pointer safe swap-out
       ASSSERT( (iIndex1<mUseSize) && (iIndex2<mUseSize) );
+      if( iIndex1 < 0 || iIndex1 >= mUseSize || iIndex2 < 0 || iIndex2 >= mUseSize || mpData == NULL )
+      {
+         return;
+      }
       mSwapT = mpData[iIndex1]; 
       mpData[iIndex1] = mpData[iIndex2];
       mpData[iIndex2] = mSwapT;
@@ -313,6 +351,10 @@ public:
 
    void AddUse( int iCountSize )
    {
+      if( (iCountSize + mUseSize) > mSize )
+      {
+         return;
+      }
       ASSSERT( (iCountSize+mUseSize)<=mSize );
       mUseSize += iCountSize;
    }
@@ -343,12 +385,22 @@ public:
    T& operator[]( int iIndex )
    {
       ASSSERT( (iIndex < mUseSize) && (iIndex > -1));
+      if( iIndex < 0 || iIndex >= mUseSize || mpData == NULL )
+      {
+         static T s_dummyDefault = T();
+         return s_dummyDefault;
+      }
       return mpData[iIndex];
    }
    
    const T& operator[]( int iIndex )const
    {
       ASSSERT( (iIndex < mUseSize) && (iIndex > -1));
+      if( iIndex < 0 || iIndex >= mUseSize || mpData == NULL )
+      {
+         static T s_dummyDefault = T();
+         return s_dummyDefault;
+      }
       return mpData[iIndex];
    }
 

@@ -452,7 +452,10 @@ void WorldRenderLayer::AddGuts( IntersectDSG* ipIntersectDSG )
 
    if(mDynaLoadState==msLoad)
    {
-      mLoadLists[mCurLoadIndex]->mIntersectElems.Add(ipIntersectDSG);      
+      if( mCurLoadIndex >= 0 && mCurLoadIndex < (int)mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+      {
+         mLoadLists[mCurLoadIndex]->mIntersectElems.Add(ipIntersectDSG);      
+      }
    }
    else
    {
@@ -478,7 +481,10 @@ void WorldRenderLayer::AddGuts( StaticEntityDSG* ipStaticEntityDSG )
 
    if(mDynaLoadState==msLoad)
    {
-      mLoadLists[mCurLoadIndex]->mSEntityElems.Add(ipStaticEntityDSG);      
+      if( mCurLoadIndex >= 0 && mCurLoadIndex < (int)mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+      {
+         mLoadLists[mCurLoadIndex]->mSEntityElems.Add(ipStaticEntityDSG);      
+      }
    }
    else
    {
@@ -504,7 +510,10 @@ void WorldRenderLayer::AddGuts( StaticPhysDSG* ipStaticPhysDSG )
 
    if(mDynaLoadState==msLoad)
    {
-      mLoadLists[mCurLoadIndex]->mSPhysElems.Add(ipStaticPhysDSG);      
+      if( mCurLoadIndex >= 0 && mCurLoadIndex < (int)mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+      {
+         mLoadLists[mCurLoadIndex]->mSPhysElems.Add(ipStaticPhysDSG);      
+      }
    }
    else
    {
@@ -530,7 +539,10 @@ void WorldRenderLayer::AddGuts( FenceEntityDSG* ipFenceEntityDSG )
 
    if(mDynaLoadState==msLoad)
    {
-      mLoadLists[mCurLoadIndex]->mFenceElems.Add(ipFenceEntityDSG);      
+      if( mCurLoadIndex >= 0 && mCurLoadIndex < (int)mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+      {
+         mLoadLists[mCurLoadIndex]->mFenceElems.Add(ipFenceEntityDSG);      
+      }
    }
    else
    {
@@ -556,7 +568,10 @@ void WorldRenderLayer::AddGuts( AnimCollisionEntityDSG* ipAnimCollDSG )
 
    if(mDynaLoadState==msLoad)
    {
-      mLoadLists[mCurLoadIndex]->mAnimCollElems.Add(ipAnimCollDSG); 
+      if( mCurLoadIndex >= 0 && mCurLoadIndex < (int)mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+      {
+         mLoadLists[mCurLoadIndex]->mAnimCollElems.Add(ipAnimCollDSG); 
+      }
 	  // Add it to a list of managed animentitydsgs so that Update can be called on it every frame
       GetAnimEntityDSGManager()->Add( ipAnimCollDSG );
    }
@@ -584,7 +599,10 @@ void WorldRenderLayer::AddGuts( AnimEntityDSG* ipAnimDSG )
 
    if(mDynaLoadState==msLoad)
    {
-      mLoadLists[mCurLoadIndex]->mAnimElems.Add(ipAnimDSG);    
+      if( mCurLoadIndex >= 0 && mCurLoadIndex < (int)mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+      {
+         mLoadLists[mCurLoadIndex]->mAnimElems.Add(ipAnimDSG);    
+      }
 	  // Add it to a list of managed animentitydsgs so that Update can be called on it every frame
 	  GetAnimEntityDSGManager()->Add( ipAnimDSG );
    }
@@ -612,7 +630,10 @@ void WorldRenderLayer::AddGuts( DynaPhysDSG* ipDynaPhysDSG )
 
    if(mDynaLoadState==msLoad)
    {
-      mLoadLists[mCurLoadIndex]->mDPhysElems.Add(ipDynaPhysDSG);      
+      if( mCurLoadIndex >= 0 && mCurLoadIndex < (int)mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+      {
+         mLoadLists[mCurLoadIndex]->mDPhysElems.Add(ipDynaPhysDSG);      
+      }
    }
    else
    {
@@ -638,7 +659,10 @@ void WorldRenderLayer::AddGuts( TriggerVolume* ipTriggerVolume )
 
    if(mDynaLoadState==msLoad)
    {
-      mLoadLists[mCurLoadIndex]->mTrigVolElems.Add(ipTriggerVolume);      
+      if( mCurLoadIndex >= 0 && mCurLoadIndex < (int)mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+      {
+         mLoadLists[mCurLoadIndex]->mTrigVolElems.Add(ipTriggerVolume);      
+      }
    }
    else
    {
@@ -739,7 +763,10 @@ void WorldRenderLayer::AddGuts( WorldSphereDSG* ipWorldSphereDSG )
 
    if(mDynaLoadState==msLoad)
    {
-      mLoadLists[mCurLoadIndex]->mWorldSphereElems.Add(ipWorldSphereDSG);      
+      if( mCurLoadIndex >= 0 && mCurLoadIndex < (int)mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+      {
+         mLoadLists[mCurLoadIndex]->mWorldSphereElems.Add(ipWorldSphereDSG);      
+      }
    }
    else
    {
@@ -759,7 +786,12 @@ void WorldRenderLayer::AddGuts( WorldSphereDSG* ipWorldSphereDSG )
 //=============================================================================
 tName& WorldRenderLayer::GetCurSectionName()
 {
-    return mLoadLists[mCurLoadIndex]->mGiveItAFuckinName;
+    static tName s_dummySectionName;
+    if( mCurLoadIndex >= 0 && mCurLoadIndex < (int)mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+    {
+        return mLoadLists[mCurLoadIndex]->mGiveItAFuckinName;
+    }
+    return s_dummySectionName;
 }
 
 //========================================================================
@@ -783,6 +815,10 @@ void WorldRenderLayer::RemoveGuts( IEntityDSG* ipEDSG )
    int i,j;
    for(i=0;i<mLoadLists.mUseSize;i++ )
    {
+     if( mLoadLists[i] == NULL )
+     {
+        continue;
+     }
      //////////////////////////////////////////////////////////////////////////
      // DPhys
      //////////////////////////////////////////////////////////////////////////
@@ -1034,20 +1070,21 @@ MEMTRACK_PUSH_GROUP( "WorldRenderLayer" );
    mpWorldScene = new WorldScene;
    mpWorldScene->Init(msMaxGuts);
 
-   mStaticLoadLists.Allocate(7);
-   mLoadLists.Allocate(7);
+   enum { MAX_DYNAMIC_LOAD_LISTS = 16 };
+   mStaticLoadLists.Allocate( MAX_DYNAMIC_LOAD_LISTS );
+   mLoadLists.Allocate( MAX_DYNAMIC_LOAD_LISTS );
 
-   mLoadLists.AddUse(7);
-   mStaticLoadLists.AddUse(7);
+   mLoadLists.AddUse( MAX_DYNAMIC_LOAD_LISTS );
+   mStaticLoadLists.AddUse( MAX_DYNAMIC_LOAD_LISTS );
 
-   mWorldSpheres.Allocate(10);
+   mWorldSpheres.Allocate(20);
 
    mDynaLoadState = msPreLoads;
    mnLoadListRefs = 2000;
    mCurLoadIndex  = -1;
 
    int i;
-   for(i=0;i<7;i++)
+   for(i=0;i<MAX_DYNAMIC_LOAD_LISTS;i++)
    {
       mStaticLoadLists[i].AllocateAll(mnLoadListRefs);
       mLoadLists[i] = &(mStaticLoadLists[i]);
@@ -1105,7 +1142,14 @@ void WorldRenderLayer::DumpAllDynaLoads( unsigned int start, SwapArray<tRefCount
     {
         while( mLoadLists.mUseSize > static_cast<int>( start ) )
         {
-            DumpDynaLoad(mLoadLists[start]->mGiveItAFuckinName, irEntityDeletionList );
+            if( mLoadLists[start] != NULL )
+            {
+                DumpDynaLoad(mLoadLists[start]->mGiveItAFuckinName, irEntityDeletionList );
+            }
+            else
+            {
+                mLoadLists.Remove(start);
+            }
         }
     }
 }
@@ -1133,7 +1177,7 @@ void WorldRenderLayer::DumpDynaLoad(tName& irGiveItAFuckinName, SwapArray<tRefCo
    int i,j,k;
    for(i=0;i<mLoadLists.mUseSize;i++ )
    {
-      if( mLoadLists[i]->mGiveItAFuckinName.GetUID() == irGiveItAFuckinName.GetUID() )
+      if( mLoadLists[i] != NULL && mLoadLists[i]->mGiveItAFuckinName.GetUID() == irGiveItAFuckinName.GetUID() )
       {
 BEGIN_PROFILE( "Remove Searches" );
 
@@ -1548,7 +1592,7 @@ bool WorldRenderLayer::DoPreDynaLoad(tName& irGiveItAFuckinName)//tUID iUID)
    int i;
    for(i=0;i<mLoadLists.mUseSize;i++)
    {
-      if(mLoadLists[i]->mGiveItAFuckinName.GetUID() == irGiveItAFuckinName.GetUID() )
+      if(mLoadLists[i] != NULL && mLoadLists[i]->mGiveItAFuckinName.GetUID() == irGiveItAFuckinName.GetUID() )
          return false;
    }
 
@@ -1561,6 +1605,14 @@ bool WorldRenderLayer::DoPreDynaLoad(tName& irGiveItAFuckinName)//tUID iUID)
    }
    else
    {
+      if( mLoadLists.mUseSize >= mLoadLists.mSize )
+      {
+         rReleasePrintf("WorldRenderLayer::DoPreDynaLoad: mLoadLists at capacity (%d/%d), cannot load %s\n",
+                        mLoadLists.mUseSize, mLoadLists.mSize, irGiveItAFuckinName.GetText());
+         HeapMgr()->PopHeap (GMA_LEVEL_ZONE);
+         return false;
+      }
+
       rReleasePrintf("*******************Loading*****%s****\n", irGiveItAFuckinName.GetText());
       mLoadLists.AddUse(1);
       mCurLoadUID    = irGiveItAFuckinName.GetUID(); 
@@ -1569,10 +1621,13 @@ bool WorldRenderLayer::DoPreDynaLoad(tName& irGiveItAFuckinName)//tUID iUID)
 	  rReleasePrintf("CurLoadIndex is %d\n", mCurLoadIndex );
       mDynaLoadState = msLoad;
       HeapMgr()->PushHeap( GMA_LEVEL_OTHER );
-      mLoadLists[mCurLoadIndex]->mGiveItAFuckinName= irGiveItAFuckinName;
-      //mLoadLists[mCurLoadIndex]->ClearAll();
-      //mLoadLists[mCurLoadIndex]->AllocateAll(mnLoadListRefs);
-      mLoadLists[mCurLoadIndex]->ClearAllUse();
+      if( mCurLoadIndex >= 0 && mCurLoadIndex < mLoadLists.mUseSize && mLoadLists[mCurLoadIndex] != NULL )
+      {
+         mLoadLists[mCurLoadIndex]->mGiveItAFuckinName= irGiveItAFuckinName;
+         //mLoadLists[mCurLoadIndex]->ClearAll();
+         //mLoadLists[mCurLoadIndex]->AllocateAll(mnLoadListRefs);
+         mLoadLists[mCurLoadIndex]->ClearAllUse();
+      }
       HeapMgr()->PopHeap(GMA_LEVEL_OTHER);
       BillboardWrappedLoader::OverrideLoader( false );
    }
@@ -1710,7 +1765,14 @@ void WorldRenderLayer::DumpAllDynaLoads()
     int start = 0;
     while( mLoadLists.mUseSize > start )
     {
-        DumpDynaLoad(mLoadLists[start]->mGiveItAFuckinName);
+        if( mLoadLists[start] != NULL )
+        {
+            DumpDynaLoad(mLoadLists[start]->mGiveItAFuckinName);
+        }
+        else
+        {
+            mLoadLists.Remove(start);
+        }
     }
 }
 //========================================================================
@@ -1734,7 +1796,7 @@ void WorldRenderLayer::DumpDynaLoad(tName& irGiveItAFuckinName)
    int i,j,k;
    for(i=0;i<mLoadLists.mUseSize;i++ )
    {
-      if( mLoadLists[i]->mGiveItAFuckinName.GetUID() == irGiveItAFuckinName.GetUID() )
+      if( mLoadLists[i] != NULL && mLoadLists[i]->mGiveItAFuckinName.GetUID() == irGiveItAFuckinName.GetUID() )
       {
          GetEventManager()->TriggerEvent( EVENT_DUMP_DYNA_SECTION, (void*)(&(mLoadLists[i]->mGiveItAFuckinName)) );
 

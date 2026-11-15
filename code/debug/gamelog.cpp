@@ -177,7 +177,7 @@ namespace
                 fprintf( fp, "================================================================================\n" );
                 fprintf( fp, "The Simpsons: Hit & Run - Diagnostic Game Log\n" );
                 fprintf( fp, "Target file:     %s\n", filePath.c_str() );
-                fprintf( fp, "App Version:     v0.93.35 (versionCode 128)\n" );
+                fprintf( fp, "App Version:     v0.93.36 (versionCode 129)\n" );
                 fprintf( fp, "Architecture:    %s\n", abi );
                 fprintf( fp, "Session started: %s\n", startStr );
                 fprintf( fp, "Active Mod:      %s\n", s_activeModName );
@@ -264,26 +264,31 @@ namespace
                         lineBuf[ linePos ] = '\0';
                         linePos = 0;
 
-                        if( strstr( lineBuf, "libmain.so" ) != NULL ||
-                            strstr( lineBuf, "libSDL2.so" ) != NULL ||
-                            strstr( lineBuf, "libopenal.so" ) != NULL )
+                        uintptr_t start = 0, end = 0;
+                        char perms[ 8 ] = { 0 };
+                        if( sscanf( lineBuf, "%lx-%lx %7s", &start, &end, perms ) >= 2 )
                         {
-                            uintptr_t start = 0, end = 0;
-                            char perms[ 8 ] = { 0 };
-                            if( sscanf( lineBuf, "%lx-%lx %7s", &start, &end, perms ) >= 2 )
+                            if( perms[ 2 ] == 'x' )
                             {
-                                if( perms[ 2 ] == 'x' )
+                                bool isPcInRange = ( pc >= start && pc < end );
+                                bool isLrInRange = ( lr >= start && lr < end );
+                                bool isKnownLib  = ( strstr( lineBuf, "libmain" ) != NULL ||
+                                                     strstr( lineBuf, "libSDL2" ) != NULL ||
+                                                     strstr( lineBuf, "libopenal" ) != NULL ||
+                                                     strstr( lineBuf, "base.apk" ) != NULL );
+
+                                if( isPcInRange || isLrInRange || isKnownLib )
                                 {
                                     const char* libName = strrchr( lineBuf, '/' );
                                     libName = libName ? libName + 1 : "unknown";
                                     char entry[ 256 ];
                                     long long offsetPc = (long long)pc - (long long)start;
                                     long long offsetLr = (long long)lr - (long long)start;
-                                    if( pc >= start && pc < end )
+                                    if( isPcInRange )
                                     {
                                         snprintf( entry, sizeof( entry ), "Module (PC):     %s [base %p, offset +0x%llx]\n", libName, (void*)start, offsetPc );
                                     }
-                                    else if( lr >= start && lr < end )
+                                    else if( isLrInRange )
                                     {
                                         snprintf( entry, sizeof( entry ), "Module (LR):     %s [base %p, offset +0x%llx]\n", libName, (void*)start, offsetLr );
                                     }
@@ -309,7 +314,37 @@ namespace
             close( mapsFd );
         }
 
-        char crashHeader[ 2560 ];
+        char regsInfo[ 2048 ] = { 0 };
+#if defined(__aarch64__)
+        if( ucontext != NULL )
+        {
+            ucontext_t* uc = (ucontext_t*)ucontext;
+            size_t regsLen = 0;
+            for( int r = 0; r < 31; r += 2 )
+            {
+                char line[ 128 ];
+                if( r + 1 < 31 )
+                {
+                    snprintf( line, sizeof( line ), "Registers:       x%-2d: 0x%016lx  x%-2d: 0x%016lx\n",
+                              r, (unsigned long)uc->uc_mcontext.regs[r],
+                              r+1, (unsigned long)uc->uc_mcontext.regs[r+1] );
+                }
+                else
+                {
+                    snprintf( line, sizeof( line ), "Registers:       x%-2d: 0x%016lx  sp : 0x%016lx\n",
+                              r, (unsigned long)uc->uc_mcontext.regs[r],
+                              (unsigned long)uc->uc_mcontext.sp );
+                }
+                if( regsLen + strlen( line ) < sizeof( regsInfo ) - 1 )
+                {
+                    strcat( regsInfo, line );
+                    regsLen += strlen( line );
+                }
+            }
+        }
+#endif
+
+        char crashHeader[ 4096 ];
         snprintf( crashHeader, sizeof( crashHeader ),
                   "\n================================================================================\n"
                   "[FATAL CRASH DETECTED]\n"
@@ -318,9 +353,10 @@ namespace
                   "Program Counter: %p\n"
                   "Link Register:   %p\n"
                   "%s"
+                  "%s"
                   "Description:     The game process encountered a critical fatal error and crashed.\n"
                   "================================================================================\n",
-                  sig, sigName, info ? info->si_addr : NULL, (void*)pc, (void*)lr, mapsInfo );
+                  sig, sigName, info ? info->si_addr : NULL, (void*)pc, (void*)lr, mapsInfo, regsInfo );
 
         // Write directly to open log streams
         for( size_t i = 0; i < s_openFiles.size(); i++ )
@@ -365,7 +401,7 @@ void GameLog::Initialize()
 
     char initMsg[ 256 ];
     snprintf( initMsg, sizeof( initMsg ),
-              "[%s] [INFO  ] [GameLog   ] Initialized diagnostic execution log (v0.93.35)", timeStr );
+              "[%s] [INFO  ] [GameLog   ] Initialized diagnostic execution log (v0.93.36)", timeStr );
     s_entries.push_back( initMsg );
 
     s_initialized = true;

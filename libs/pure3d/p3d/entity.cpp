@@ -140,6 +140,12 @@ const char* tName::GetText(void) const
 // tName operators  -----------------------------------------------------------
 bool tName::operator==(const tName& other) const
 {
+    volatile uintptr_t thisAddr = reinterpret_cast<uintptr_t>(this);
+    volatile uintptr_t otherAddr = reinterpret_cast<uintptr_t>(&other);
+    if( thisAddr < 0x10000 || otherAddr < 0x10000 )
+    {
+        return thisAddr == otherAddr;
+    }
     return GetUID()==other.GetUID();//(((tUID)uid[0])<<32|((tUID)uid[1])) == (((tUID)other.uid[0])<<32|((tUID)other.uid[1])) ;
 }
 
@@ -150,8 +156,16 @@ bool tName::operator!=( const tName& other ) const
 
 const tName& tName::operator=(const tName& other)
 {
-    if(this == NULL)
+    volatile uintptr_t thisAddr = reinterpret_cast<uintptr_t>(this);
+    if( thisAddr < 0x10000 )
+    {
         return other;
+    }
+    volatile uintptr_t otherAddr = reinterpret_cast<uintptr_t>(&other);
+    if( otherAddr < 0x10000 )
+    {
+        return *this;
+    }
 
     //Assignment of self to self, strcpy doesn't like that.
     if(this == &other)
