@@ -425,12 +425,14 @@ void LoadingManager::CancelPendingRequests()
 
     mCancellingLoads = true;
 
-    while ( mLoading )
+    unsigned int cancelLoops = 0;
+    while ( mLoading && ++cancelLoops < 100 )
     {
         ::radFileService();
         p3d::loadManager->SwitchTask();
         p3d::loadManager->TriggerCallbacks();      
     }
+    mLoading = false;
 
     //Close all the open cement files.
     CementFileHandle i;

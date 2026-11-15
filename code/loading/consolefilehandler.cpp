@@ -134,16 +134,39 @@ void ConsoleFileHandler::OnFileOperationsComplete( void* pUserData )
     {
         case OPENFILE:
         {
-            
-MEMTRACK_PUSH_GROUP( "ConsoleFileHandler" );
+            if ( mpConsoleFile == 0 || !mpConsoleFile->IsOpen() )
+            {
+                rReleasePrintf( "ConsoleFileHandler: Failed to open file, completing immediately\n" );
+                if ( mpConsoleFile != 0 )
+                {
+                    mpConsoleFile->Release();
+                    mpConsoleFile = 0;
+                }
+                mAsyncLoadState = DONE;
+                mpCallback->OnLoadFileComplete( pUserData );
+                break;
+            }
+
+            MEMTRACK_PUSH_GROUP( "ConsoleFileHandler" );
             unsigned int length = mpConsoleFile->GetSize();
+            if ( length == 0 )
+            {
+                rReleasePrintf( "ConsoleFileHandler: File '%s' is empty, completing immediately\n", mpConsoleFile->GetFilename() );
+                mpConsoleFile->Release();
+                mpConsoleFile = 0;
+                mAsyncLoadState = DONE;
+                MEMTRACK_POP_GROUP( "ConsoleFileHandler" );
+                mpCallback->OnLoadFileComplete( pUserData );
+                break;
+            }
+
             mFileDataBuffer = new(GMA_TEMP) char[length + 1];
             
             mpConsoleFile->ReadAsync( mFileDataBuffer, length );
             mpConsoleFile->AddCompletionCallback( this, (void*)pUserData );
             
             mAsyncLoadState = READDATA;
-MEMTRACK_POP_GROUP("ConsoleFileHandler");
+            MEMTRACK_POP_GROUP("ConsoleFileHandler");
         }
         break;
         

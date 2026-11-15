@@ -194,11 +194,10 @@ void LoadingGameplayContext::OnUpdate( unsigned int elapsedTime )
                     GameLog_Recordf("LoadingGameplayContext", "Failsafe: forced transition to CONTEXT_GAMEPLAY after %u ticks", m_loadingElapsedTicks);
                     GetGameFlow()->SetContext( CONTEXT_GAMEPLAY );
                 }
-                else if( m_loadingElapsedTicks > 1200 ) // ~20 seconds total
+                else if( m_loadingElapsedTicks > 3600 ) // ~60 seconds total timeout
                 {
-                    GameLog_Recordf("LoadingGameplayContext", "Hard Failsafe: cancelling stuck requests and forcing transition to CONTEXT_GAMEPLAY after %u ticks", m_loadingElapsedTicks);
-                    rReleasePrintf("LoadingGameplayContext: Hard Failsafe: cancelling stuck requests after %u ticks\n", m_loadingElapsedTicks);
-                    GetLoadingManager()->CancelPendingRequests();
+                    GameLog_Recordf("LoadingGameplayContext", "Failsafe: forced transition to CONTEXT_GAMEPLAY after %u ticks (LM still loading)", m_loadingElapsedTicks);
+                    rReleasePrintf("LoadingGameplayContext: Failsafe: forced transition to CONTEXT_GAMEPLAY after %u ticks\n", m_loadingElapsedTicks);
                     GetGameFlow()->SetContext( CONTEXT_GAMEPLAY );
                 }
             }

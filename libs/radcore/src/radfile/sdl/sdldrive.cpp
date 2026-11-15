@@ -785,11 +785,16 @@ static bool CheckModCandidateWithQuirks( const char* modsDir, const char* subFol
         return true;
     }
 
-    // Quirk 1: mod audio files (or scripts) mistakenly placed under scripts/cars/sound/
+    // Quirk 1: mod audio files (or scripts) mistakenly placed under scripts/cars/sound/ or scripts/sound/
     if( strncmp( cname, "sound/", 6 ) == 0 )
     {
         std::string quirkPath = "scripts/cars/" + std::string( cname );
         if( CheckModCandidate( modsDir, subFolder, quirkPath.c_str(), outPath, outSize ) )
+        {
+            return true;
+        }
+        std::string quirkPath2 = "scripts/" + std::string( cname );
+        if( CheckModCandidate( modsDir, subFolder, quirkPath2.c_str(), outPath, outSize ) )
         {
             return true;
         }
@@ -807,6 +812,31 @@ static bool CheckModCandidateWithQuirks( const char* modsDir, const char* subFol
             {
                 return true;
             }
+        }
+    }
+
+    // Quirk 3: mod scripts mistakenly placed under scripts/cars/ (e.g. scripts/missions/ -> scripts/cars/missions/)
+    if( strncmp( cname, "scripts/", 8 ) == 0 && strncmp( cname, "scripts/cars/", 13 ) != 0 )
+    {
+        std::string quirkPath = "scripts/cars/" + std::string( cname + 8 );
+        if( CheckModCandidate( modsDir, subFolder, quirkPath.c_str(), outPath, outSize ) )
+        {
+            return true;
+        }
+    }
+
+    // Quirk 4: mod missions requested without scripts/ prefix
+    if( strncmp( cname, "missions/", 9 ) == 0 )
+    {
+        std::string quirkPath = "scripts/cars/" + std::string( cname );
+        if( CheckModCandidate( modsDir, subFolder, quirkPath.c_str(), outPath, outSize ) )
+        {
+            return true;
+        }
+        std::string quirkPath2 = "scripts/" + std::string( cname );
+        if( CheckModCandidate( modsDir, subFolder, quirkPath2.c_str(), outPath, outSize ) )
+        {
+            return true;
         }
     }
 
