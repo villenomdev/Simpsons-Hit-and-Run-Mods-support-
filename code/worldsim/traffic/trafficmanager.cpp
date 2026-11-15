@@ -1143,6 +1143,11 @@ void TrafficManager::DisableTraffic()
 
 void TrafficManager::AddCharacterToStopFor( Character* character )
 {
+    if( character == NULL )
+    {
+        return;
+    }
+
     rAssert( character != NULL );
 
     bool assigned = false;
@@ -1165,6 +1170,11 @@ void TrafficManager::AddCharacterToStopFor( Character* character )
 
 void TrafficManager::RemoveCharacterToStopFor( Character* character )
 {
+    if( character == NULL )
+    {
+        return;
+    }
+
     rAssert( character != NULL );
 
     for( int i=0; i<MAX_CHARS_TO_STOP_FOR; i++ )

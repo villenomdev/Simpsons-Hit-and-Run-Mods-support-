@@ -155,6 +155,11 @@ bool SimpsonsSoundPlayer::PlaySound( const char* resourceName,
 bool SimpsonsSoundPlayer::PlayResource( IDaSoundResource* resource, 
                                         SimpsonsSoundPlayerCallback* callback /* = NULL  */ )
 {
+    if( resource == NULL )
+    {
+        return false;
+    }
+
     bool canPlay;
 
     canPlay = QueueSound( resource, callback );
@@ -243,6 +248,11 @@ bool SimpsonsSoundPlayer::QueueSound( radKey32 resourceID,
 bool SimpsonsSoundPlayer::QueueSound( IDaSoundResource* resource,
                                       SimpsonsSoundPlayerCallback* callback )
 {
+    if( resource == NULL )
+    {
+        return false;
+    }
+
     if( m_playa != NULL )
     {
         rDebugString( "Dropped sound, player busy\n" );

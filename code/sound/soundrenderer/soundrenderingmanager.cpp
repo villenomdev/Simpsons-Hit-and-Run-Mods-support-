@@ -47,8 +47,22 @@
 #include <sound/soundmanager.h>
 #include <sound/soundrenderer/soundnucleus.hpp>
 #include <sound/dialog/dialogcoordinator.h>
+#include <sound/avatar/carsoundparameters.h>
 #include <radobjectbtree.hpp>
 #include <radmemorymonitor.hpp>
+
+#include <string>
+#if defined(RAD_ANDROID)
+#include <android/log.h>
+#define LOG_TAG "SHAR_Sound"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#else
+#define LOGI(...) printf(__VA_ARGS__)
+#define LOGE(...) fprintf(stderr, __VA_ARGS__)
+#endif
+
+extern bool radSdlDriveFindModFile( const char* rawFileName, char* outPath, size_t outSize );
 
 #include <pddi/pddi.hpp>
 #include <p3d/utility.hpp>
@@ -997,6 +1011,9 @@ void daSoundRenderingManager::QueueRadscriptFileLoads()
 
     // Tuning
     RunTuningSoundScripts();
+
+    // Mod sound scripts (e.g. custom dialog, carsound, level scripts)
+    LoadModSoundScripts();
 #endif
 
     GetLoadingManager()->AddCallback( this );
@@ -1595,6 +1612,311 @@ void daSoundRenderingManager::registerDialogueCementFiles( const char* cementFil
     rAssert( s_NumDialogCementFiles == 1 );
     m_soundCementFileHandles[0] = GetLoadingManager()->RegisterCementLibrary( cementFilename );
 #endif
+}
+
+void daSoundRenderingManager::LoadModSoundScripts( void )
+{
+    LOGI("[Sound] Searching for mod sound scripts (.spt)...");
+
+    struct ModScriptTarget {
+        const char* scriptName;
+        SoundClusterName cluster;
+        bool isTuning;
+    };
+
+    static const ModScriptTarget s_targets[] = {
+        { "dialog.spt", SC_NEVER_LOADED, false },
+        { "level1.spt", SC_LEVEL1, false },
+        { "level2.spt", SC_LEVEL2, false },
+        { "level3.spt", SC_LEVEL3, false },
+        { "level4.spt", SC_LEVEL4, false },
+        { "level5.spt", SC_LEVEL5, false },
+        { "level6.spt", SC_LEVEL6, false },
+        { "level7.spt", SC_LEVEL7, false },
+        { "carsound.spt", SC_INGAME, false },
+        { "car_tune.spt", SC_INGAME, true }
+    };
+
+    for( size_t i = 0; i < sizeof(s_targets)/sizeof(s_targets[0]); ++i )
+    {
+        const ModScriptTarget& target = s_targets[i];
+        char foundPath[1024];
+        bool found = false;
+
+        char candidate[256];
+        snprintf( candidate, sizeof(candidate), "sound/scripts/%s", target.scriptName );
+        if( radSdlDriveFindModFile( candidate, foundPath, sizeof(foundPath) ) )
+        {
+            found = true;
+        }
+        else
+        {
+            snprintf( candidate, sizeof(candidate), "scripts/cars/sound/scripts/%s", target.scriptName );
+            if( radSdlDriveFindModFile( candidate, foundPath, sizeof(foundPath) ) )
+            {
+                found = true;
+            }
+            else
+            {
+                snprintf( candidate, sizeof(candidate), "scripts/sound/scripts/%s", target.scriptName );
+                if( radSdlDriveFindModFile( candidate, foundPath, sizeof(foundPath) ) )
+                {
+                    found = true;
+                }
+                else
+                {
+                    snprintf( candidate, sizeof(candidate), "%s", target.scriptName );
+                    if( radSdlDriveFindModFile( candidate, foundPath, sizeof(foundPath) ) )
+                    {
+                        found = true;
+                    }
+                }
+            }
+        }
+
+        if( found )
+        {
+            LOGI("[Sound] Found mod sound script '%s' at '%s'", target.scriptName, foundPath);
+            ParseSoundScript( foundPath, target.cluster );
+        }
+    }
+}
+
+void daSoundRenderingManager::ParseSoundScript( const char* filePath, SoundClusterName cluster )
+{
+    FILE* fp = fopen( filePath, "r" );
+    if( !fp )
+    {
+        LOGE( "[Sound] Failed to open script: '%s'", filePath );
+        return;
+    }
+
+    LOGI( "[Sound] Parsing script: '%s' (cluster=%d)", filePath, cluster );
+
+    char lineBuf[1024];
+    daSoundResourceData* currentResource = NULL;
+    carSoundParameters* currentCarTune = NULL;
+
+    while( fgets( lineBuf, sizeof(lineBuf), fp ) != NULL )
+    {
+        // Strip leading whitespace
+        char* p = lineBuf;
+        while( *p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' ) p++;
+        if( *p == '\0' || *p == '#' || ( p[0] == '/' && p[1] == '/' ) )
+        {
+            continue;
+        }
+
+        // Check for block end
+        if( *p == '}' )
+        {
+            currentResource = NULL;
+            currentCarTune = NULL;
+            continue;
+        }
+
+        // Check for: create daSoundResourceData named <Name>
+        if( strncmp( p, "create daSoundResourceData named ", 33 ) == 0 )
+        {
+            currentCarTune = NULL;
+            currentResource = NULL;
+            SetCurrentNameSpace( GetSoundNamespace() );
+            GetSoundManager()->GetSoundLoader()->SetCurrentCluster( cluster );
+
+            char* nameStart = p + 33;
+            while( *nameStart == ' ' || *nameStart == '\t' ) nameStart++;
+            char* nameEnd = nameStart;
+            while( *nameEnd && *nameEnd != ' ' && *nameEnd != '\t' && *nameEnd != '\r' && *nameEnd != '\n' && *nameEnd != '{' ) nameEnd++;
+            std::string resName( nameStart, nameEnd - nameStart );
+            if( !resName.empty() )
+            {
+                IRefCount* existing = m_pCurrentNameSpace->GetInstance( resName.c_str() );
+                if( existing != NULL )
+                {
+                    currentResource = dynamic_cast<daSoundResourceData*>( existing );
+                    if( !currentResource )
+                    {
+                        currentResource = static_cast<daSoundResourceData*>( existing );
+                    }
+                }
+                else
+                {
+                    currentResource = &Create<daSoundResourceData>( resName.c_str() );
+                }
+            }
+            continue;
+        }
+
+        // Check for: create carSoundParameters named <Name>
+        if( strncmp( p, "create carSoundParameters named ", 32 ) == 0 )
+        {
+            currentResource = NULL;
+            currentCarTune = NULL;
+            SetCurrentNameSpace( GetTuningNamespace() );
+            GetSoundManager()->GetSoundLoader()->SetCurrentCluster( SC_NEVER_LOADED );
+
+            char* nameStart = p + 32;
+            while( *nameStart == ' ' || *nameStart == '\t' ) nameStart++;
+            char* nameEnd = nameStart;
+            while( *nameEnd && *nameEnd != ' ' && *nameEnd != '\t' && *nameEnd != '\r' && *nameEnd != '\n' && *nameEnd != '{' ) nameEnd++;
+            std::string tuneName( nameStart, nameEnd - nameStart );
+            if( !tuneName.empty() )
+            {
+                IRefCount* existing = m_pCurrentNameSpace->GetInstance( tuneName.c_str() );
+                if( existing != NULL )
+                {
+                    currentCarTune = dynamic_cast<carSoundParameters*>( existing );
+                    if( !currentCarTune )
+                    {
+                        currentCarTune = static_cast<carSoundParameters*>( existing );
+                    }
+                }
+                else
+                {
+                    currentCarTune = &Create<carSoundParameters>( tuneName.c_str() );
+                }
+            }
+            continue;
+        }
+
+        // Parse daSoundResourceData properties
+        if( currentResource != NULL )
+        {
+            if( strncmp( p, "AddFilename", 11 ) == 0 )
+            {
+                char* q1 = strchr( p, '"' );
+                if( q1 )
+                {
+                    char* q2 = strchr( q1 + 1, '"' );
+                    if( q2 )
+                    {
+                        std::string fn( q1 + 1, q2 - ( q1 + 1 ) );
+                        float weight = 1.0f;
+                        char* wStr = q2 + 1;
+                        while( *wStr == ' ' || *wStr == '\t' ) wStr++;
+                        if( *wStr != ')' && *wStr != '\0' )
+                        {
+                            weight = (float)atof( wStr );
+                        }
+                        currentResource->AddFilename( fn.c_str(), weight );
+                    }
+                }
+                continue;
+            }
+
+            if( strncmp( p, "SetStreaming", 12 ) == 0 )
+            {
+                bool streaming = ( strstr( p, "true" ) != NULL || strstr( p, "TRUE" ) != NULL || strstr( p, "1" ) != NULL );
+                currentResource->SetStreaming( streaming );
+                continue;
+            }
+
+            if( strncmp( p, "SetLooping", 10 ) == 0 )
+            {
+                bool looping = ( strstr( p, "true" ) != NULL || strstr( p, "TRUE" ) != NULL || strstr( p, "1" ) != NULL );
+                currentResource->SetLooping( looping );
+                continue;
+            }
+
+            if( strncmp( p, "SetTrim", 7 ) == 0 )
+            {
+                char* paren = strchr( p, '(' );
+                if( paren )
+                {
+                    float trim = (float)atof( paren + 1 );
+                    currentResource->SetTrim( trim );
+                }
+                continue;
+            }
+        }
+
+        // Parse carSoundParameters properties
+        if( currentCarTune != NULL )
+        {
+            auto ExtractQuoted = []( const char* str ) -> std::string {
+                char* q1 = strchr( (char*)str, '"' );
+                if( q1 ) {
+                    char* q2 = strchr( q1 + 1, '"' );
+                    if( q2 ) return std::string( q1 + 1, q2 - ( q1 + 1 ) );
+                }
+                return "";
+            };
+
+            if( strncmp( p, "SetEngineClipName", 17 ) == 0 ) {
+                std::string s = ExtractQuoted( p );
+                if( !s.empty() ) currentCarTune->SetEngineClipName( s.c_str() );
+            } else if( strncmp( p, "SetEngineIdleClipName", 21 ) == 0 ) {
+                std::string s = ExtractQuoted( p );
+                if( !s.empty() ) currentCarTune->SetEngineIdleClipName( s.c_str() );
+            } else if( strncmp( p, "SetDamagedEngineClipName", 24 ) == 0 ) {
+                std::string s = ExtractQuoted( p );
+                if( !s.empty() ) currentCarTune->SetDamagedEngineClipName( s.c_str() );
+            } else if( strncmp( p, "SetHornClipName", 15 ) == 0 ) {
+                std::string s = ExtractQuoted( p );
+                if( !s.empty() ) currentCarTune->SetHornClipName( s.c_str() );
+            } else if( strncmp( p, "SetOverlayClipName", 18 ) == 0 ) {
+                std::string s = ExtractQuoted( p );
+                if( !s.empty() ) currentCarTune->SetOverlayClipName( s.c_str() );
+            } else if( strncmp( p, "SetRoadSkidClipName", 19 ) == 0 ) {
+                std::string s = ExtractQuoted( p );
+                if( !s.empty() ) currentCarTune->SetRoadSkidClipName( s.c_str() );
+            } else if( strncmp( p, "SetDirtSkidClipName", 19 ) == 0 ) {
+                std::string s = ExtractQuoted( p );
+                if( !s.empty() ) currentCarTune->SetDirtSkidClipName( s.c_str() );
+            } else if( strncmp( p, "SetCarDoorOpenClipName", 22 ) == 0 ) {
+                std::string s = ExtractQuoted( p );
+                if( !s.empty() ) currentCarTune->SetCarDoorOpenClipName( s.c_str() );
+            } else if( strncmp( p, "SetCarDoorCloseClipName", 23 ) == 0 ) {
+                std::string s = ExtractQuoted( p );
+                if( !s.empty() ) currentCarTune->SetCarDoorCloseClipName( s.c_str() );
+            } else if( strncmp( p, "SetReversePitchCapKmh", 21 ) == 0 ) {
+                char* paren = strchr( p, '(' );
+                if( paren ) currentCarTune->SetReversePitchCapKmh( (float)atof( paren + 1 ) );
+            } else if( strncmp( p, "SetReversePitchRange", 20 ) == 0 ) {
+                float v1 = 0.0f, v2 = 0.0f;
+                if( sscanf( p, "SetReversePitchRange ( %f %f )", &v1, &v2 ) == 2 ) {
+                    currentCarTune->SetReversePitchRange( v1, v2 );
+                }
+            } else if( strncmp( p, "SetIdleEnginePitch", 18 ) == 0 ) {
+                char* paren = strchr( p, '(' );
+                if( paren ) currentCarTune->SetIdleEnginePitch( (float)atof( paren + 1 ) );
+            } else if( strncmp( p, "SetShiftPoint", 13 ) == 0 ) {
+                unsigned int gear = 0; float val = 0.0f;
+                if( sscanf( p, "SetShiftPoint ( %u %f )", &gear, &val ) == 2 ) {
+                    currentCarTune->SetShiftPoint( gear, val );
+                }
+            } else if( strncmp( p, "SetGearShiftPitchDrop", 21 ) == 0 ) {
+                unsigned int gear = 0; float val = 0.0f;
+                if( sscanf( p, "SetGearShiftPitchDrop ( %u %f )", &gear, &val ) == 2 ) {
+                    currentCarTune->SetGearShiftPitchDrop( gear, val );
+                }
+            } else if( strncmp( p, "SetGearPitchRange", 17 ) == 0 ) {
+                unsigned int gear = 0; float v1 = 0.0f, v2 = 0.0f;
+                if( sscanf( p, "SetGearPitchRange ( %u %f %f )", &gear, &v1, &v2 ) == 3 ) {
+                    currentCarTune->SetGearPitchRange( gear, v1, v2 );
+                }
+            } else if( strncmp( p, "SetAttackTimeMsecs", 18 ) == 0 ) {
+                char* paren = strchr( p, '(' );
+                if( paren ) currentCarTune->SetAttackTimeMsecs( (float)atof( paren + 1 ) );
+            } else if( strncmp( p, "SetDelayTimeMsecs", 17 ) == 0 ) {
+                char* paren = strchr( p, '(' );
+                if( paren ) currentCarTune->SetDelayTimeMsecs( (unsigned int)atoi( paren + 1 ) );
+            } else if( strncmp( p, "SetDecayTimeMsecs", 17 ) == 0 ) {
+                char* paren = strchr( p, '(' );
+                if( paren ) currentCarTune->SetDecayTimeMsecs( (float)atof( paren + 1 ) );
+            } else if( strncmp( p, "SetDecayFinishTrim", 18 ) == 0 ) {
+                char* paren = strchr( p, '(' );
+                if( paren ) currentCarTune->SetDecayFinishTrim( (float)atof( paren + 1 ) );
+            } else if( strncmp( p, "SetDownshiftDamperSize", 22 ) == 0 ) {
+                char* paren = strchr( p, '(' );
+                if( paren ) currentCarTune->SetDownshiftDamperSize( (float)atof( paren + 1 ) );
+            }
+            continue;
+        }
+    }
+
+    fclose( fp );
+    LOGI( "[Sound] Finished parsing script: '%s'", filePath );
 }
 
 } // Sound Namespace

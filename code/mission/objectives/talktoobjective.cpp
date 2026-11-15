@@ -176,6 +176,18 @@ void TalkToObjective::OnInitialize()
     //Setup the target
     //This should set the character that the objective is waiting to talk to
     Character* character = GetCharacterManager()->GetMissionCharacter( mCharacterName );
+    if ( !character )
+    {
+        character = GetCharacterManager()->GetCharacterByName( mCharacterName );
+    }
+    if ( !character )
+    {
+        character = GetCharacterManager()->AddCharacter( CharacterManager::NPC, mCharacterName, mCharacterName, "npd", NULL );
+        if ( character )
+        {
+            character->SetRole( Character::ROLE_MISSION );
+        }
+    }
 
     if ( character )
     {
@@ -218,8 +230,11 @@ void TalkToObjective::OnInitialize()
     // Radius should equal about 1m.
     //
     float r = mTriggerRadius;
-    rmt::Vector charPos;
-    mTalkToTarget->GetPosition( charPos );
+    rmt::Vector charPos( 0.0f, 0.0f, 0.0f );
+    if ( mTalkToTarget != NULL )
+    {
+        mTalkToTarget->GetPosition( charPos );
+    }
     SphereTriggerVolume* pTriggerVolume = new(gma) SphereTriggerVolume( charPos, r );
 
     mEvtLoc->SetNumTriggers( 1, gma );
@@ -233,8 +248,11 @@ void TalkToObjective::OnInitialize()
     //This should be the event that the ActionButtonManager sends...
     GetEventManager()->AddListener( this, EVENT_TALK_TO_NPC );
 
-    rmt::Vector pos;
-    mTalkToTarget->GetPosition( pos );
+    rmt::Vector pos = charPos;
+    if ( mTalkToTarget != NULL )
+    {
+        mTalkToTarget->GetPosition( pos );
+    }
 
     pos.y += mYOffset;
 

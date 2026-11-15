@@ -149,6 +149,8 @@ protected:
 #endif
     void RunCarSoundScripts( void );
     void RunTuningSoundScripts( void );
+    void LoadModSoundScripts( void );
+    void ParseSoundScript( const char* filePath, SoundClusterName cluster );
 #endif
 
 private:

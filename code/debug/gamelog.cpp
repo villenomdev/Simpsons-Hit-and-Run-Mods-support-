@@ -24,6 +24,8 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <ucontext.h>
+#include <stdint.h>
 
 #if defined(RAD_ANDROID)
     #include <android/log.h>
@@ -174,7 +176,7 @@ namespace
                 fprintf( fp, "================================================================================\n" );
                 fprintf( fp, "The Simpsons: Hit & Run - Diagnostic Game Log\n" );
                 fprintf( fp, "Target file:     %s\n", filePath.c_str() );
-                fprintf( fp, "App Version:     v0.93.28 (versionCode 121)\n" );
+                fprintf( fp, "App Version:     v0.93.29 (versionCode 122)\n" );
                 fprintf( fp, "Architecture:    %s\n", abi );
                 fprintf( fp, "Session started: %s\n", startStr );
                 fprintf( fp, "Active Mod:      %s\n", s_activeModName );
@@ -212,7 +214,7 @@ namespace
         _exit( 0 );
     }
 
-    void FatalCrashHandler( int sig, siginfo_t* info, void* /*ucontext*/ )
+    void FatalCrashHandler( int sig, siginfo_t* info, void* ucontext )
     {
         const char* sigName = "UNKNOWN";
         switch( sig )
@@ -225,15 +227,33 @@ namespace
             default:      sigName = "Fatal Signal"; break;
         }
 
+        uintptr_t pc = 0;
+        uintptr_t lr = 0;
+        if( ucontext != NULL )
+        {
+            ucontext_t* uc = (ucontext_t*)ucontext;
+#if defined(__aarch64__)
+            pc = (uintptr_t)uc->uc_mcontext.pc;
+            lr = (uintptr_t)uc->uc_mcontext.regs[30];
+#elif defined(__arm__)
+            pc = (uintptr_t)uc->uc_mcontext.arm_pc;
+            lr = (uintptr_t)uc->uc_mcontext.arm_lr;
+#elif defined(__x86_64__)
+            pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
+#endif
+        }
+
         char crashHeader[ 512 ];
         snprintf( crashHeader, sizeof( crashHeader ),
                   "\n================================================================================\n"
                   "[FATAL CRASH DETECTED]\n"
                   "Signal:          %d (%s)\n"
                   "Fault Address:   %p\n"
+                  "Program Counter: %p\n"
+                  "Link Register:   %p\n"
                   "Description:     The game process encountered a critical fatal error and crashed.\n"
                   "================================================================================\n",
-                  sig, sigName, info ? info->si_addr : NULL );
+                  sig, sigName, info ? info->si_addr : NULL, (void*)pc, (void*)lr );
 
         // Write directly to open log streams
         for( size_t i = 0; i < s_openFiles.size(); i++ )
@@ -278,7 +298,7 @@ void GameLog::Initialize()
 
     char initMsg[ 256 ];
     snprintf( initMsg, sizeof( initMsg ),
-              "[%s] [INFO  ] [GameLog   ] Initialized diagnostic execution log (v0.93.28)", timeStr );
+              "[%s] [INFO  ] [GameLog   ] Initialized diagnostic execution log (v0.93.29)", timeStr );
     s_entries.push_back( initMsg );
 
     s_initialized = true;

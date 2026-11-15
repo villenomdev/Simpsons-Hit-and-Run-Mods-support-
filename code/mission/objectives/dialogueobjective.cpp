@@ -279,35 +279,70 @@ void DialogueObjective::OnInitialize()
     
     //Send the alert to the dialogue system to start playing this bad-ass
     Character* c1 = GetCharacterManager()->GetMissionCharacter( mChar1Name );
-    tRefCounted::Assign( mDialogEventData.char1, c1 );
-    TrafficManager::GetInstance()->AddCharacterToStopFor( c1 );
+    if ( !c1 )
+    {
+        c1 = GetCharacterManager()->GetCharacterByName( mChar1Name );
+    }
+    if ( !c1 )
+    {
+        c1 = GetCharacterManager()->GetCharacter( 0 );
+    }
+
+    if ( c1 )
+    {
+        tRefCounted::Assign( mDialogEventData.char1, c1 );
+        TrafficManager::GetInstance()->AddCharacterToStopFor( c1 );
+    }
 
     Character* c2 = GetCharacterManager()->GetMissionCharacter( mChar2Name );
-    tRefCounted::Assign( mDialogEventData.char2, c2 );
-    TrafficManager::GetInstance()->AddCharacterToStopFor( c2 );
-
-
-    //POSITIONS, PLEASE!
-    mCharacter1WasInCarToStartWith = c1->IsInCar();
-    c1->GetPosition( &mChar1OldPos );
-    mChar1Rotation = c1->GetFacingDir();
-
-    rmt::Vector location;
-    if ( mChar1Pos )
+    if ( !c2 )
     {
-        mChar1Pos->GetLocation( &location );
-        c1->RelocateAndReset( location, mChar1Pos->GetRotation() );
+        c2 = GetCharacterManager()->GetCharacterByName( mChar2Name );
+    }
+    if ( !c2 )
+    {
+        c2 = GetCharacterManager()->AddCharacter( CharacterManager::NPC, mChar2Name, mChar2Name, "npd", NULL );
+        if ( c2 )
+        {
+            c2->SetRole( Character::ROLE_MISSION );
+        }
+    }
+
+    if ( c2 )
+    {
+        tRefCounted::Assign( mDialogEventData.char2, c2 );
+        TrafficManager::GetInstance()->AddCharacterToStopFor( c2 );
     }
 
 
-    mCharacter2WasInCarToStartWith = c2->IsInCar();
-    c2->GetPosition( &mChar2OldPos );
-    mChar2Rotation = c2->GetFacingDir();
+    rmt::Vector location;
 
-    if ( mChar2Pos )
+    //POSITIONS, PLEASE!
+    if ( c1 )
     {
-        mChar2Pos->GetLocation( &location );
-        c2->RelocateAndReset( location, mChar2Pos->GetRotation() );
+        mCharacter1WasInCarToStartWith = c1->IsInCar();
+        c1->GetPosition( &mChar1OldPos );
+        mChar1Rotation = c1->GetFacingDir();
+
+        if ( mChar1Pos )
+        {
+            mChar1Pos->GetLocation( &location );
+            c1->RelocateAndReset( location, mChar1Pos->GetRotation() );
+        }
+    }
+
+
+    if ( c2 )
+    {
+        mCharacter2WasInCarToStartWith = c2->IsInCar();
+        c2->GetPosition( &mChar2OldPos );
+        mChar2Rotation = c2->GetFacingDir();
+
+        if ( mChar2Pos )
+        {
+            mChar2Pos->GetLocation( &location );
+            c2->RelocateAndReset( location, mChar2Pos->GetRotation() );
+        }
     }
 
     Vehicle* v = GetGameplayManager()->GetCurrentVehicle();
@@ -393,7 +428,14 @@ void DialogueObjective::OnInitialize()
     {
         GetSuperCamManager()->GetSCC( 0 )->DoCameraCut();
 
-        mChar1Pos->GetLocation( &location );
+        if ( mChar1Pos )
+        {
+            mChar1Pos->GetLocation( &location );
+        }
+        else if ( mChar2Pos )
+        {
+            mChar2Pos->GetLocation( &location );
+        }
         TrafficManager::GetInstance()->ClearTrafficInSphere( rmt::Sphere( location, 50.0f ) );
 
         mMoved = true;
