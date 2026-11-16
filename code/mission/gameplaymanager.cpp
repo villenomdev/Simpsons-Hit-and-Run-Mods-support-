@@ -3357,7 +3357,7 @@ bool GameplayManager::IsVehiclePartOfCurrentMission( Vehicle* vehicle )
     }
 
     // 1. Check player vehicle slots (default, other, ai)
-    for ( int i = 0; i < MAX_CAR_SLOTS; ++i )
+    for ( int i = 0; i < MAX_VEHICLE_SLOTS; ++i )
     {
         if ( mVehicleSlots[ i ].mp_vehicle == vehicle || mVehicleSlots[ i ].pHuskVehicle == vehicle )
         {
