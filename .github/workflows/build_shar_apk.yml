@@ -55,9 +55,16 @@ jobs:
           find android-project/app/build/outputs/apk/ -name "*.apk" -exec cp {} dist/ \;
           ls -la dist/
 
+      - name: Upload Unsigned APK to Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload v0.93-mods dist/app-release.apk#app-release-unsigned.apk --repo ${{ github.repository }} --clobber || true
+
       - name: Upload APKs as Artifacts
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: Simpsons_HitAndRun_Mods_APK
           path: dist/*.apk
-          retention-days: 30
+          retention-days: 1
