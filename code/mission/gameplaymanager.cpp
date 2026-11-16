@@ -40,6 +40,7 @@
 #include <mission/gameplaymanager.h>
 #include <mission/missionmanager.h>
 #include <mission/mission.h>
+#include <mission/missionstage.h>
 #include <mission/missionscriptloader.h>
 #include <mission/animatedicon.h>
 #include <mission/charactersheet/charactersheetmanager.h>
@@ -1917,7 +1918,7 @@ void GameplayManager::ClearVehicleSlotIfInSphere( eCarSlots slot, const rmt::Sph
     {
         vehicle->GetPosition( &position );
         bool isVehicleInSphere = s.Contains( position );
-        if( isVehicleInSphere )
+        if( isVehicleInSphere && !IsVehiclePartOfCurrentMission( vehicle ) )
         {
             ClearVehicleSlot( slot );
         }
@@ -3225,7 +3226,7 @@ int  GameplayManager::UpdateVDU()
                 //dont care about the y vaule since we are going to just do a top down radial check
                 CarPositionDifference.y =0;                
                 //chuck: remove the car if it is out of the players view and greater than 5.0 meters from player
-                if ((spInstance->TestPosInFrustrumOfPlayer(position,0) == false) && (rmt::Sqrt(CarPositionDifference.MagnitudeSqr()) > 5.0f))
+                if (!spInstance->IsVehiclePartOfCurrentMission(mVDU.mpVehicle[i]) && (spInstance->TestPosInFrustrumOfPlayer(position,0) == false) && (rmt::Sqrt(CarPositionDifference.MagnitudeSqr()) > 5.0f))
                 {
                     GetVehicleCentral()->RemoveVehicleFromActiveList(mVDU.mpVehicle[i]);
 
@@ -3343,6 +3344,79 @@ bool GameplayManager::TestForContinuityErrorWithCar( Vehicle* v, bool aiSlot )
     }
 
     return continuityError;
+}
+
+//=============================================================================
+// GameplayManager::IsVehiclePartOfCurrentMission
+//=============================================================================
+bool GameplayManager::IsVehiclePartOfCurrentMission( Vehicle* vehicle )
+{
+    if ( vehicle == NULL )
+    {
+        return false;
+    }
+
+    // 1. Check player vehicle slots (default, other, ai)
+    for ( int i = 0; i < MAX_CAR_SLOTS; ++i )
+    {
+        if ( mVehicleSlots[ i ].mp_vehicle == vehicle || mVehicleSlots[ i ].pHuskVehicle == vehicle )
+        {
+            return true;
+        }
+    }
+
+    // 2. Check mission vehicle slots
+    for ( int i = 0; i < MAX_MISSION_VEHICLE_SLOTS; ++i )
+    {
+        if ( mMissionVehicleSlots[ i ].vehicle == vehicle || mMissionVehicleSlots[ i ].pHuskVehicle == vehicle )
+        {
+            return true;
+        }
+        if ( vehicle->mName != NULL && mMissionVehicleSlots[ i ].name[ 0 ] != '\0' &&
+             strcmp( vehicle->mName, mMissionVehicleSlots[ i ].name ) == 0 )
+        {
+            return true;
+        }
+    }
+
+    // 3. Check current mission stages
+    Mission* currMission = GetCurrentMission();
+    if ( currMission != NULL )
+    {
+        int numStages = currMission->GetNumStages();
+        for ( int s = 0; s < numStages; ++s )
+        {
+            MissionStage* stage = currMission->GetStage( s );
+            if ( stage != NULL )
+            {
+                int numVeh = stage->GetNumVehicles();
+                for ( int v = 0; v < numVeh; ++v )
+                {
+                    if ( stage->GetVehicle( v ) == vehicle )
+                    {
+                        return true;
+                    }
+                    if ( vehicle->mName != NULL && stage->GetVehicle( v ) != NULL &&
+                         stage->GetVehicle( v )->mName != NULL &&
+                         strcmp( vehicle->mName, stage->GetVehicle( v )->mName ) == 0 )
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Mod-specific / heuristic safeguard: Homer's family sedan in Level 1 Mission 0 (Cola Caper)
+    if ( vehicle->mName != NULL && ( strcmp( vehicle->mName, "famil_v" ) == 0 || strcmp( vehicle->mName, "cSedan" ) == 0 ) )
+    {
+        if ( GetCurrentLevelIndex() == RenderEnums::L1 && GetCurrentMissionIndex() == RenderEnums::M1 )
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 int GameplayManager::RemoveVehicleFromMissionVehicleSlots(Vehicle* pVehicle)

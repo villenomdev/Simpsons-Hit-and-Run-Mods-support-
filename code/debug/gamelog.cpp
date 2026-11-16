@@ -177,7 +177,7 @@ namespace
                 fprintf( fp, "================================================================================\n" );
                 fprintf( fp, "The Simpsons: Hit & Run - Diagnostic Game Log\n" );
                 fprintf( fp, "Target file:     %s\n", filePath.c_str() );
-                fprintf( fp, "App Version:     v0.93.37 (versionCode 130)\n" );
+                fprintf( fp, "App Version:     v0.93.38 (versionCode 131)\n" );
                 fprintf( fp, "Architecture:    %s\n", abi );
                 fprintf( fp, "Session started: %s\n", startStr );
                 fprintf( fp, "Active Mod:      %s\n", s_activeModName );

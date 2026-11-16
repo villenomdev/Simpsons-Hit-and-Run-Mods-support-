@@ -266,12 +266,15 @@ void ParkedCarManager::HandleEvent( EventEnum id, void* pEventData )
                 
             {
                 //Can we dump this car?
-                bool dump = true;
+                bool dump = false;
                 Avatar* avatar = GetAvatarManager()->GetAvatarForPlayer( 0 );
                 rAssert( avatar );
                 
+                bool isPartOfMission = GetGameplayManager()->IsVehiclePartOfCurrentMission( mFreeCar.mCar );
+
                 if ( ( GetGameplayManager()->GetCurrentVehicle() == mFreeCar.mCar ) ||
-                     ( GetVehicleCentral()->IsCarUnderConstruction(mFreeCar.mCar) == true ) )
+                     ( GetVehicleCentral()->IsCarUnderConstruction(mFreeCar.mCar) == true ) ||
+                     isPartOfMission )
                 {
                     dump = false;
                 }
@@ -291,22 +294,26 @@ void ParkedCarManager::HandleEvent( EventEnum id, void* pEventData )
                     {
                         dump = true;
                     }
+                    else
+                    {
+                        dump = false;
+                    }
                 }
 
                 if ( dump )
                 {
                     RemoveFreeCar();
                     p3d::inventory->RemoveSectionElements( FREE_CAR_SECTION );
-                }
 
-                //Reset this as it is either a message that we can try to dump the car, 
-                //or the car is already gone.
-                mFreeCar.mLoadedZoneUID = 0;
+                    //Reset this as it is either a message that we can try to dump the car, 
+                    //or the car is already gone.
+                    mFreeCar.mLoadedZoneUID = 0;
 
-                if ( mFreeCarLocator )
-                {
-                    mFreeCarLocator->Release();
-                    mFreeCarLocator = NULL;
+                    if ( mFreeCarLocator )
+                    {
+                        mFreeCarLocator->Release();
+                        mFreeCarLocator = NULL;
+                    }
                 }
             }
             break;
@@ -712,6 +719,34 @@ void ParkedCarManager::AddFreeCar( const char* name, CarStartLocator* loc )
     
    
     
+    if ( mFreeCar.mCar != NULL )
+    {
+        bool isCurrentMissionCar = GetGameplayManager()->IsVehiclePartOfCurrentMission( mFreeCar.mCar );
+        bool isCurrentPlayerCar = ( GetGameplayManager()->GetCurrentVehicle() == mFreeCar.mCar );
+
+        Avatar* avatar = GetAvatarManager()->GetAvatarForPlayer( 0 );
+        bool isClose = false;
+        if ( avatar && mFreeCar.mCar )
+        {
+            rmt::Vector charPos, carPos, charToCar;
+            avatar->GetPosition( charPos );
+            mFreeCar.mCar->GetPosition( &carPos );
+            charToCar.Sub( carPos, charPos );
+            if ( charToCar.MagnitudeSqr() <= ( 200.0f * 200.0f ) )
+            {
+                isClose = true;
+            }
+        }
+
+        if ( isCurrentMissionCar || isCurrentPlayerCar || isClose )
+        {
+            return;
+        }
+
+        RemoveFreeCar();
+        p3d::inventory->RemoveSectionElements( FREE_CAR_SECTION );
+    }
+
     if ( mFreeCar.mCar == NULL )
     {
         unsigned int nameLen = strlen( name ) > MAX_CAR_NAME_LEN ? MAX_CAR_NAME_LEN : strlen( name );
@@ -790,18 +825,22 @@ void ParkedCarManager::RemoveFreeCar()
 
 void ParkedCarManager::RemoveFreeCarIfClose( const rmt::Vector& position )
 {
-    // where is the free car?
-    rmt::Vector freeCarPosition;
-    if ( mFreeCar.mCar != NULL )
+    if ( mFreeCar.mCar == NULL )
     {
-        if(mFreeCar.mCar == GetAvatarManager()->GetAvatarForPlayer(0)->GetVehicle())
-        {
-            return;
-        }
-    
-        mFreeCar.mCar->GetPosition( &freeCarPosition );
+        return;
     }
-    if( ( position - freeCarPosition ).MagnitudeSqr() < 10.0 * 10.0 )
+    if ( mFreeCar.mCar == GetAvatarManager()->GetAvatarForPlayer(0)->GetVehicle() )
+    {
+        return;
+    }
+    if ( GetGameplayManager()->IsVehiclePartOfCurrentMission( mFreeCar.mCar ) )
+    {
+        return;
+    }
+
+    rmt::Vector freeCarPosition;
+    mFreeCar.mCar->GetPosition( &freeCarPosition );
+    if( ( position - freeCarPosition ).MagnitudeSqr() < 10.0f * 10.0f )
     {
         RemoveFreeCar();
     }

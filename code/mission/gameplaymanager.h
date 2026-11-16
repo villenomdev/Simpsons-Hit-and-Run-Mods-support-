@@ -385,6 +385,7 @@ public:
     Vehicle* GetMissionVehicleByName( const char* name );
     Vehicle* GetUserVehicleByName(const char* name);
     int GetMissionVehicleIndex(Vehicle* vehicle);
+    bool IsVehiclePartOfCurrentMission( Vehicle* vehicle );
 
     GameTypeEnum GetGameType();
 
