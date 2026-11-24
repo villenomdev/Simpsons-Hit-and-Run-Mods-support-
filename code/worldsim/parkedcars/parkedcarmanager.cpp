@@ -17,6 +17,7 @@
 #include <raddebug.hpp>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <p3d/utility.hpp>
 #include <pddi/pdditype.hpp>
 
@@ -272,9 +273,29 @@ void ParkedCarManager::HandleEvent( EventEnum id, void* pEventData )
                 
                 bool isPartOfMission = GetGameplayManager()->IsVehiclePartOfCurrentMission( mFreeCar.mCar );
 
+                const char* vname = mFreeCar.mCar->GetName();
+                bool isHomerCar = false;
+                if ( vname != NULL )
+                {
+                    char lower[ 64 ];
+                    size_t len = strlen( vname );
+                    if ( len >= sizeof( lower ) ) len = sizeof( lower ) - 1;
+                    for ( size_t i = 0; i < len; ++i )
+                    {
+                        lower[ i ] = (char)tolower( (unsigned char)vname[ i ] );
+                    }
+                    lower[ len ] = '\0';
+                    if ( strstr( lower, "famil" ) != NULL || strstr( lower, "sedan" ) != NULL )
+                    {
+                        isHomerCar = true;
+                    }
+                }
+
                 if ( ( GetGameplayManager()->GetCurrentVehicle() == mFreeCar.mCar ) ||
                      ( GetVehicleCentral()->IsCarUnderConstruction(mFreeCar.mCar) == true ) ||
-                     isPartOfMission )
+                     isPartOfMission ||
+                     isHomerCar ||
+                     ( GetGameplayManager()->GetCurrentLevelIndex() == RenderEnums::L1 ) )
                 {
                     dump = false;
                 }
@@ -724,6 +745,24 @@ void ParkedCarManager::AddFreeCar( const char* name, CarStartLocator* loc )
         bool isCurrentMissionCar = GetGameplayManager()->IsVehiclePartOfCurrentMission( mFreeCar.mCar );
         bool isCurrentPlayerCar = ( GetGameplayManager()->GetCurrentVehicle() == mFreeCar.mCar );
 
+        const char* vname = mFreeCar.mCar->GetName();
+        bool isHomerCar = false;
+        if ( vname != NULL )
+        {
+            char lower[ 64 ];
+            size_t len = strlen( vname );
+            if ( len >= sizeof( lower ) ) len = sizeof( lower ) - 1;
+            for ( size_t i = 0; i < len; ++i )
+            {
+                lower[ i ] = (char)tolower( (unsigned char)vname[ i ] );
+            }
+            lower[ len ] = '\0';
+            if ( strstr( lower, "famil" ) != NULL || strstr( lower, "sedan" ) != NULL )
+            {
+                isHomerCar = true;
+            }
+        }
+
         Avatar* avatar = GetAvatarManager()->GetAvatarForPlayer( 0 );
         bool isClose = false;
         if ( avatar && mFreeCar.mCar )
@@ -738,7 +777,8 @@ void ParkedCarManager::AddFreeCar( const char* name, CarStartLocator* loc )
             }
         }
 
-        if ( isCurrentMissionCar || isCurrentPlayerCar || isClose )
+        if ( isHomerCar || isCurrentMissionCar || isCurrentPlayerCar || isClose ||
+             GetGameplayManager()->GetCurrentLevelIndex() == RenderEnums::L1 )
         {
             return;
         }
@@ -749,6 +789,22 @@ void ParkedCarManager::AddFreeCar( const char* name, CarStartLocator* loc )
 
     if ( mFreeCar.mCar == NULL )
     {
+        if ( mFreeCar.mName[ 0 ] != '\0' && GetGameplayManager()->GetCurrentLevelIndex() == RenderEnums::L1 )
+        {
+            char lowerPending[ 64 ];
+            size_t plen = strlen( mFreeCar.mName );
+            if ( plen >= sizeof( lowerPending ) ) plen = sizeof( lowerPending ) - 1;
+            for ( size_t i = 0; i < plen; ++i )
+            {
+                lowerPending[ i ] = (char)tolower( (unsigned char)mFreeCar.mName[ i ] );
+            }
+            lowerPending[ plen ] = '\0';
+            if ( strstr( lowerPending, "famil" ) != NULL || strstr( lowerPending, "sedan" ) != NULL )
+            {
+                return;
+            }
+        }
+
         unsigned int nameLen = strlen( name ) > MAX_CAR_NAME_LEN ? MAX_CAR_NAME_LEN : strlen( name );
         strncpy( mFreeCar.mName, name, nameLen );
         mFreeCar.mName[ nameLen ] = '\0';
@@ -836,6 +892,26 @@ void ParkedCarManager::RemoveFreeCarIfClose( const rmt::Vector& position )
     if ( GetGameplayManager()->IsVehiclePartOfCurrentMission( mFreeCar.mCar ) )
     {
         return;
+    }
+
+    const char* vname = mFreeCar.mCar->GetName();
+    if ( vname != NULL )
+    {
+        char lower[ 64 ];
+        size_t len = strlen( vname );
+        if ( len >= sizeof( lower ) ) len = sizeof( lower ) - 1;
+        for ( size_t i = 0; i < len; ++i )
+        {
+            lower[ i ] = (char)tolower( (unsigned char)vname[ i ] );
+        }
+        lower[ len ] = '\0';
+        if ( strstr( lower, "famil" ) != NULL || strstr( lower, "sedan" ) != NULL )
+        {
+            if ( GetGameplayManager()->GetCurrentLevelIndex() == RenderEnums::L1 )
+            {
+                return;
+            }
+        }
     }
 
     rmt::Vector freeCarPosition;

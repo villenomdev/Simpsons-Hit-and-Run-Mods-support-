@@ -16,6 +16,7 @@
 #include <raddebug.hpp>
 
 #include <string.h>
+#include <ctype.h>
 
 //========================================
 // Project Includes
@@ -3356,6 +3357,17 @@ bool GameplayManager::IsVehiclePartOfCurrentMission( Vehicle* vehicle )
         return false;
     }
 
+    // 0. Active player vehicle or vehicle player is currently inside
+    if ( vehicle == GetCurrentVehicle() )
+    {
+        return true;
+    }
+    Avatar* avatar = GetAvatarManager() ? GetAvatarManager()->GetAvatarForPlayer( 0 ) : NULL;
+    if ( avatar != NULL && avatar->GetVehicle() == vehicle )
+    {
+        return true;
+    }
+
     // 1. Check player vehicle slots (default, other, ai)
     for ( int i = 0; i < MAX_VEHICLE_SLOTS; ++i )
     {
@@ -3407,12 +3419,23 @@ bool GameplayManager::IsVehiclePartOfCurrentMission( Vehicle* vehicle )
         }
     }
 
-    // 4. Mod-specific / heuristic safeguard: Homer's family sedan in Level 1 Mission 0 (Cola Caper)
-    if ( vehicle->mName != NULL && ( strcmp( vehicle->mName, "famil_v" ) == 0 || strcmp( vehicle->mName, "cSedan" ) == 0 ) )
+    // 4. Mod-specific / heuristic safeguard: Homer's family sedan in Level 1 (Cola Caper / Sunday Drive / all Level 1 missions)
+    if ( vehicle->mName != NULL )
     {
-        if ( GetCurrentLevelIndex() == RenderEnums::L1 && GetCurrentMissionIndex() == RenderEnums::M1 )
+        char lower[ 64 ];
+        size_t len = strlen( vehicle->mName );
+        if ( len >= sizeof( lower ) ) len = sizeof( lower ) - 1;
+        for ( size_t i = 0; i < len; ++i )
         {
-            return true;
+            lower[ i ] = (char)tolower( (unsigned char)vehicle->mName[ i ] );
+        }
+        lower[ len ] = '\0';
+        if ( strstr( lower, "famil" ) != NULL || strstr( lower, "sedan" ) != NULL )
+        {
+            if ( GetCurrentLevelIndex() == RenderEnums::L1 )
+            {
+                return true;
+            }
         }
     }
 
