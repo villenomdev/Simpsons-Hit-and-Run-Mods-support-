@@ -39,7 +39,7 @@ You must provide **your own copy of the official PC release** of *The Simpsons: 
 > **Note:** Backward-compatible fallback to the legacy paths (`Android/data/com.c4rlox.simpsons/files/` and `/storage/emulated/0/simpsons_mods/`) is still checked if files already live there, though using `/storage/emulated/0/Simpsons Hit and Run/` is recommended.
 
 ### 2. Installing Mods (`mods/`)
-Place extracted mod folders inside:
+Place extracted mod folders or .lmlm inside:
 
 ```text
 /storage/emulated/0/Simpsons Hit and Run/mods/
@@ -51,7 +51,6 @@ For example:
 /storage/emulated/0/Simpsons Hit and Run/mods/MyModName/CustomFiles/...
 ```
 
-Or loose override files directly under `mods/CustomFiles/...`.
 
 ### 3. Configuration (`Simpsons_configuration.txt`)
 When launched, the app generates its configuration file where you can toggle or select mods:
