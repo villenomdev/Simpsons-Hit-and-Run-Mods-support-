@@ -72,7 +72,12 @@ namespace MissionObjectiveNames
         "timer",
         "buycar",
         "buyskin",
-        "gooutside"
+        "gooutside",
+        "insidetrigger",
+        "outsidetrigger",
+        "camera",
+        "hitpeds",
+        "destroycars"
     };
 
 }
@@ -110,6 +115,11 @@ public:
         OBJ_BUY_CAR,
         OBJ_BUY_SKIN,
         OBJ_GO_OUTSIDE,
+        OBJ_INSIDE_TRIGGER,
+        OBJ_OUTSIDE_TRIGGER,
+        OBJ_CAMERA,
+        OBJ_HIT_PEDS,
+        OBJ_DESTROY_CARS,
 	    NUM_OBJECTIVES
     };
 
@@ -223,6 +233,78 @@ private:
     NPCRemove mRemoveNPCs[MAX_NPCS];
 
     bool mRockOut;
+};
+
+class TriggerObjective : public MissionObjective
+{
+public:
+    TriggerObjective( bool insideMode );
+    virtual ~TriggerObjective();
+
+    void SetTriggerName( const char* name );
+
+protected:
+    virtual void OnInitialize();
+    virtual void OnFinalize();
+    virtual void OnUpdate( unsigned int elapsedTime );
+
+private:
+    bool mInsideMode;
+    char mTriggerName[ 64 ];
+    Locator* mLocator;
+    bool mWasActive;
+    bool mSavedActive;
+};
+
+class CameraObjective : public MissionObjective
+{
+public:
+    CameraObjective();
+    virtual ~CameraObjective();
+
+    void SetCameraName( const char* name );
+    void SetMulticontName( const char* name );
+    void SetCanSkip( bool canSkip ) { mCanSkip = canSkip; }
+    virtual void HandleEvent( EventEnum id, void* pEventData );
+
+protected:
+    virtual void OnInitialize();
+    virtual void OnFinalize();
+    virtual void OnUpdate( unsigned int elapsedTime );
+
+private:
+    char mCameraName[ 64 ];
+    char mMulticontName[ 64 ];
+    bool mCanSkip;
+    bool mListening;
+    unsigned int mElapsedMs;
+};
+
+class MultiTargetObjective : public MissionObjective
+{
+public:
+    explicit MultiTargetObjective( bool destroyCarsMode );
+    virtual ~MultiTargetObjective();
+
+    void AddTargetModel( const char* model );
+    void SetTotal( int total ) { mTotal = ( total > 0 ) ? total : 1; }
+    virtual void HandleEvent( EventEnum id, void* pEventData );
+
+protected:
+    virtual void OnInitialize();
+    virtual void OnFinalize();
+    virtual void OnUpdate( unsigned int elapsedTime );
+
+private:
+    enum { MAX_TARGETS = 8 };
+    bool mDestroyCarsMode;
+    char mTargetModels[ MAX_TARGETS ][ 64 ];
+    int mNumTargets;
+    int mTotal;
+    int mCount;
+    unsigned int mElapsedMs;
+    void* mLastHitPtr;
+    unsigned int mLastHitTimeMs;
 };
 
 #endif //MISSIONOBJECTIVE_H

@@ -302,6 +302,43 @@ private:
 
     static void ActivateTrigger( int argc, const char** argv );
     static void DeactivateTrigger( int argc, const char** argv );
+    static void DisableTrigger( int argc, const char** argv );
+
+    // Lucas Mod Launcher commands
+    static void AddStageVehicleCharacter( int argc, const char** argv );
+    static void RemoveStageVehicleCharacter( int argc, const char** argv );
+    static bool IfCurrentCheckpoint( int argc, const char** argv );
+    static void CheckpointHere( int argc, const char** argv );
+    static void SetCheckpointResetPlayerInCar( int argc, const char** argv );
+    static void SetCheckpointResetPlayerOutCar( int argc, const char** argv );
+    static void SetCheckpointDynaLoadData( int argc, const char** argv );
+    static void SetCheckpointPedGroup( int argc, const char** argv );
+    static void SetCheckpointTrafficGroup( int argc, const char** argv );
+    static void SetParkedCarsEnabled( int argc, const char** argv );
+    static void SetPedsEnabled( int argc, const char** argv );
+    static void SetStageHitAndRun( int argc, const char** argv );
+    static void ResetStageHitAndRun( int argc, const char** argv );
+    static void SetNoHitAndRunMusicForStage( int argc, const char** argv );
+    static void SetStageHitAndRunDecay( int argc, const char** argv );
+    static void SetStageHitAndRunDecayHitAndRun( int argc, const char** argv );
+    static void SetStageHitAndRunDecayInterior( int argc, const char** argv );
+    static void SetStageHitAndRunFine( int argc, const char** argv );
+    static void SetStageAllowMissionCancel( int argc, const char** argv );
+    static void SetStageCharacterModel( int argc, const char** argv );
+    static void SetStagePayout( int argc, const char** argv );
+    static void SetStageVehicleReset( int argc, const char** argv );
+    static void SetObjTrigger( int argc, const char** argv );
+    static void SetObjCameraName( int argc, const char** argv );
+    static void SetObjMulticontName( int argc, const char** argv );
+    static void SetObjCanSkip( int argc, const char** argv );
+    static void AddObjTargetModel( int argc, const char** argv );
+    static void SetObjTotal( int argc, const char** argv );
+    static void SetCondTrigger( int argc, const char** argv );
+    static void SetCondThreshold( int argc, const char** argv );
+    static void SetCondDecay( int argc, const char** argv );
+    static void SetCondSound( int argc, const char** argv );
+    static void AddCondTargetModel( int argc, const char** argv );
+    static void LmlNoOp( int argc, const char** argv );
 
     static void CreateAnimPhysObject( int argc, const char** argv );
     static void CreateActionEventTrigger( int argc, const char** argv );

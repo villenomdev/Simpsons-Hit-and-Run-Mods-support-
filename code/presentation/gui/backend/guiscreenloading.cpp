@@ -291,12 +291,14 @@ void CGuiScreenLoading::HandleMessage
 #endif
                 // don't allow loading bar to go backwards
                 //
+                static bool s_warnedMemoryBarExceeds100 = false;
                 if( newMemoryUsage > m_currentMemoryUsage )
                 {
                     m_currentMemoryUsage = newMemoryUsage;
 
                     if( m_currentMemoryUsage < 1.0f )
                     {
+                        s_warnedMemoryBarExceeds100 = false;
                         m_loadingBar.SetValue( 1.0f - m_currentMemoryUsage );
                     }
                     else
@@ -337,7 +339,11 @@ void CGuiScreenLoading::HandleMessage
                         }
 #else
     #ifndef RAD_DEBUG
-                        rReleaseWarningMsg( false, "Current memory usage for loading bar exceeds 100%!" );
+                        if( !s_warnedMemoryBarExceeds100 )
+                        {
+                            s_warnedMemoryBarExceeds100 = true;
+                            rReleaseWarningMsg( false, "Current memory usage for loading bar exceeds 100%!" );
+                        }
     #endif
 #endif // LOADING_BAR_EXPLOSION
                     }

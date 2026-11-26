@@ -29,6 +29,7 @@
 #include <console/console.h>
 
 #include <console/fbstricmp.h>
+#include <debug/gamelog.h>
 #include <main/commandlineoptions.h>
 #include <memory/srrmemory.h>
 #include <memory/memorypool.h>
@@ -578,18 +579,21 @@ bool Console::SetLogMode(int logMode)
 //==============================================================================
 void Console::Printf(const char *fmt, ...)
 {
-#ifdef RAD_DEBUG
-    //make sure we have a console
     if (!spInstance)
         return;
 
     char message[MAX_STRING_LENGTH];
     va_list args;
-    int i = 0;
     va_start(args, fmt);
-    i = vsprintf(message, fmt, args);
+    vsnprintf(message, MAX_STRING_LENGTH, fmt, args);
     va_end(args);
 
+    if (strncmp(message, "ConERR", 6) == 0 || strstr(message, "ERR") != NULL || strstr(message, "not found") != NULL)
+    {
+        GameLog_Record("Console", message);
+    }
+
+#ifdef RAD_DEBUG
     // do some tune printf for designers
     rTunePrintf( message );
 
@@ -602,18 +606,18 @@ void Console::Printf(const char *fmt, ...)
 //to an error page in the DebugInfo stuff Chakib is working on!
 void Console::Errorf(const char *fmt, ...)
 {
-#ifdef RAD_DEBUG
-    //make sure we have a console
     if (!spInstance)
         return;
 
     char message[MAX_STRING_LENGTH];
     va_list args;
-    int i = 0;
     va_start(args, fmt);
-    i = vsprintf(message, fmt, args);
+    vsnprintf(message, MAX_STRING_LENGTH, fmt, args);
     va_end(args);
 
+    GameLog_Record("ERROR", message);
+
+#ifdef RAD_DEBUG
     //record the message to the console log file
     spInstance->LogMessage(0, message, true);
 #endif
@@ -2124,8 +2128,9 @@ bool Console::Evaluate( const char* string, const char* fileName )
         //skip past until we find the closing brace...
         if (isConditional && ! conditionalResult)
         {
-            //skip past everything until we find the closing bracket
-            while (true)
+            int targetLevel = readEndBracketLevel - 1;
+            //skip past everything until we find the matching closing bracket
+            while (readEndBracketLevel > targetLevel)
             {
                 char *token = GetNextToken(&stringPtr, mArgv[0]);
                 if (! token)
@@ -2135,10 +2140,13 @@ bool Console::Evaluate( const char* string, const char* fileName )
                     return (false);
                 }
 
+                else if (! smStricmp(token, "{"))
+                {
+                    readEndBracketLevel++;
+                }
                 else if (! smStricmp(token, "}"))
                 {
                     readEndBracketLevel--;
-                    break;
                 }
             }
         }

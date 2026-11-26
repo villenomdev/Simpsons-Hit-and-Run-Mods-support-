@@ -184,6 +184,9 @@ public:
 
     void SetCarryOverOutOfCarCondition(bool flag) { mbCarryOverOutOfCarCondition = flag;};
 
+    void RegisterStageVehicleCharacter( const char* charName );
+    void UnregisterStageVehicleCharacter( const char* charName );
+
 public:
     bool mIsStreetRace1Or2;
 
@@ -279,6 +282,10 @@ private:
     bool mShowHUD : 1;
 
     int mNumValidFailureHints;
+
+    static const int MAX_MISSION_STAGE_VEHICLE_CHARS = 8;
+    char mStageVehicleCharNames[ MAX_MISSION_STAGE_VEHICLE_CHARS ][ 32 ];
+    int mNumStageVehicleCharNames;
 
 };
 

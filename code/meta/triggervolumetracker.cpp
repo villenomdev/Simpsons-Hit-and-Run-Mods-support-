@@ -42,6 +42,8 @@
 #include <worldsim/redbrick/vehicle.h>
 
 #include <mission/gameplaymanager.h>
+#include <mission/mission.h>
+#include <mission/missionstage.h>
 
 #include <debug/profiler.h>
 
@@ -1266,7 +1268,25 @@ void TriggerVolumeTracker::TestVolume( TriggerVolume* vol,
 
     Locator* loc = vol->GetLocator();
 
-    if ( playerID < MAX_PLAYERS &&
+    bool stageDisabledTrigger = false;
+    if ( loc != NULL && GetGameplayManager() != NULL )
+    {
+        Mission* currMission = GetGameplayManager()->GetCurrentMission();
+        if ( currMission != NULL )
+        {
+            MissionStage* currStage = currMission->GetCurrentStage();
+            if ( currStage != NULL && currStage->IsTriggerDisabled( loc->GetName() ) )
+            {
+                stageDisabledTrigger = true;
+            }
+        }
+    }
+
+    if ( stageDisabledTrigger )
+    {
+        collision = false;
+    }
+    else if ( playerID < MAX_PLAYERS &&
          GetAvatarManager()->GetAvatarForPlayer( playerID )->IsInCar() &&
          ( loc && loc->GetDataType() != LocatorType::OCCLUSION ) )
     {

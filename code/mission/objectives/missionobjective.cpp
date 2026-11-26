@@ -22,7 +22,16 @@
 
 #include <meta/locator.h>
 #include <meta/carstartlocator.h>
+#include <meta/eventlocator.h>
+#include <meta/triggerlocator.h>
+#include <meta/triggervolume.h>
 #include <meta/zoneeventlocator.h>
+#include <events/eventmanager.h>
+#include <camera/animatedcam.h>
+#include <camera/supercammanager.h>
+#include <camera/supercamcentral.h>
+#include <camera/supercam.h>
+#include <worldsim/redbrick/vehicle.h>
 
 #include <mission/gameplaymanager.h>
 #include <mission/missionmanager.h>
@@ -1748,4 +1757,323 @@ bool MissionObjective::IsRaceDialog() const
         }
     }
     return false;
+}
+
+//=============================================================================
+// TriggerObjective (LML insidetrigger / outsidetrigger)
+//=============================================================================
+TriggerObjective::TriggerObjective( bool insideMode ) :
+    mInsideMode( insideMode ),
+    mLocator( NULL ),
+    mWasActive( true ),
+    mSavedActive( false )
+{
+    mTriggerName[ 0 ] = '\0';
+}
+
+TriggerObjective::~TriggerObjective()
+{
+}
+
+void TriggerObjective::SetTriggerName( const char* name )
+{
+    if( name != NULL )
+    {
+        strncpy( mTriggerName, name, sizeof( mTriggerName ) - 1 );
+        mTriggerName[ sizeof( mTriggerName ) - 1 ] = '\0';
+    }
+}
+
+void TriggerObjective::OnInitialize()
+{
+    mLocator = p3d::find<Locator>( mTriggerName );
+    mSavedActive = false;
+    if( mLocator != NULL )
+    {
+        mWasActive = mLocator->GetFlag( Locator::ACTIVE );
+        mSavedActive = true;
+        mLocator->SetFlag( Locator::ACTIVE, true );
+    }
+}
+
+void TriggerObjective::OnFinalize()
+{
+    if( mLocator != NULL && mSavedActive )
+    {
+        mLocator->SetFlag( Locator::ACTIVE, mWasActive );
+    }
+    mLocator = NULL;
+    mSavedActive = false;
+}
+
+void TriggerObjective::OnUpdate( unsigned int elapsedTime )
+{
+    if( GetFinished() || mTriggerName[ 0 ] == '\0' )
+    {
+        return;
+    }
+    if( mLocator == NULL )
+    {
+        mLocator = p3d::find<Locator>( mTriggerName );
+        if( mLocator != NULL && !mSavedActive )
+        {
+            mWasActive = mLocator->GetFlag( Locator::ACTIVE );
+            mSavedActive = true;
+            mLocator->SetFlag( Locator::ACTIVE, true );
+        }
+    }
+    if( mLocator == NULL )
+    {
+        return;
+    }
+
+    bool inside = false;
+    TriggerLocator* trigLoc = dynamic_cast<TriggerLocator*>( mLocator );
+    if( trigLoc != NULL )
+    {
+        for( unsigned int i = 0; i < trigLoc->GetNumTriggers(); ++i )
+        {
+            if( trigLoc->GetTriggerVolume( i )->IsPlayerTracking( 0 ) )
+            {
+                inside = true;
+                break;
+            }
+        }
+    }
+    else
+    {
+        Character* player = GetCharacterManager()->GetCharacter( 0 );
+        if( player != NULL )
+        {
+            rmt::Vector pPos, lPos, diff;
+            player->GetPosition( pPos );
+            mLocator->GetLocation( &lPos );
+            diff.Sub( pPos, lPos );
+            inside = ( diff.MagnitudeSqr() < 25.0f );
+        }
+    }
+
+    if( mInsideMode ? inside : !inside )
+    {
+        SetFinished( true );
+    }
+}
+
+//=============================================================================
+// CameraObjective (LML camera)
+//=============================================================================
+CameraObjective::CameraObjective() :
+    mCanSkip( false ),
+    mListening( false ),
+    mElapsedMs( 0 )
+{
+    mCameraName[ 0 ] = '\0';
+    mMulticontName[ 0 ] = '\0';
+}
+
+CameraObjective::~CameraObjective()
+{
+}
+
+void CameraObjective::SetCameraName( const char* name )
+{
+    if( name != NULL )
+    {
+        strncpy( mCameraName, name, sizeof( mCameraName ) - 1 );
+        mCameraName[ sizeof( mCameraName ) - 1 ] = '\0';
+    }
+}
+
+void CameraObjective::SetMulticontName( const char* name )
+{
+    if( name != NULL )
+    {
+        strncpy( mMulticontName, name, sizeof( mMulticontName ) - 1 );
+        mMulticontName[ sizeof( mMulticontName ) - 1 ] = '\0';
+    }
+}
+
+void CameraObjective::OnInitialize()
+{
+    mElapsedMs = 0;
+    AnimatedCam::AllowSkipping( mCanSkip );
+    if( mCameraName[ 0 ] != '\0' )
+    {
+        AnimatedCam::SetCamera( mCameraName );
+    }
+    if( mMulticontName[ 0 ] != '\0' )
+    {
+        AnimatedCam::SetMulticontroller( mMulticontName );
+    }
+    GetEventManager()->AddListener( this, EVENT_ANIMATED_CAM_SHUTDOWN );
+    mListening = true;
+    AnimatedCam::CheckPendingCameraSwitch();
+}
+
+void CameraObjective::HandleEvent( EventEnum id, void* pEventData )
+{
+    if( id == EVENT_ANIMATED_CAM_SHUTDOWN )
+    {
+        SetFinished( true );
+    }
+    MissionObjective::HandleEvent( id, pEventData );
+}
+
+void CameraObjective::OnUpdate( unsigned int elapsedTime )
+{
+    if( GetFinished() )
+    {
+        return;
+    }
+    mElapsedMs += elapsedTime;
+    if( mElapsedMs >= 1500 )
+    {
+        SuperCam* activeCam = GetSuperCamManager()->GetSCC( 0 ) ? GetSuperCamManager()->GetSCC( 0 )->GetActiveSuperCam() : NULL;
+        if( activeCam == NULL || activeCam->GetType() != SuperCam::ANIMATED_CAM )
+        {
+            SetFinished( true );
+        }
+    }
+}
+
+void CameraObjective::OnFinalize()
+{
+    if( mListening )
+    {
+        GetEventManager()->RemoveListener( this, EVENT_ANIMATED_CAM_SHUTDOWN );
+        mListening = false;
+    }
+    AnimatedCam::ClearCamera();
+}
+
+//=============================================================================
+// MultiTargetObjective (LML hitpeds / destroycars)
+//=============================================================================
+MultiTargetObjective::MultiTargetObjective( bool destroyCarsMode ) :
+    mDestroyCarsMode( destroyCarsMode ),
+    mNumTargets( 0 ),
+    mTotal( 1 ),
+    mCount( 0 ),
+    mElapsedMs( 0 ),
+    mLastHitPtr( NULL ),
+    mLastHitTimeMs( 0 )
+{
+}
+
+MultiTargetObjective::~MultiTargetObjective()
+{
+}
+
+void MultiTargetObjective::AddTargetModel( const char* model )
+{
+    if( model != NULL && model[ 0 ] != '\0' && mNumTargets < MAX_TARGETS )
+    {
+        strncpy( mTargetModels[ mNumTargets ], model, 63 );
+        mTargetModels[ mNumTargets ][ 63 ] = '\0';
+        mNumTargets++;
+    }
+}
+
+void MultiTargetObjective::OnInitialize()
+{
+    mCount = 0;
+    mElapsedMs = 0;
+    mLastHitPtr = NULL;
+    mLastHitTimeMs = 0;
+    if( mDestroyCarsMode )
+    {
+        GetEventManager()->AddListener( this, EVENT_VEHICLE_DESTROYED );
+    }
+    else
+    {
+        GetEventManager()->AddListener( this, EVENT_KICK_NPC );
+        GetEventManager()->AddListener( this, EVENT_PEDESTRIAN_SMACKDOWN );
+        GetEventManager()->AddListener( this, EVENT_PLAYER_CAR_HIT_NPC );
+    }
+}
+
+void MultiTargetObjective::OnFinalize()
+{
+    GetEventManager()->RemoveAll( this );
+}
+
+void MultiTargetObjective::OnUpdate( unsigned int elapsedTime )
+{
+    mElapsedMs += elapsedTime;
+}
+
+void MultiTargetObjective::HandleEvent( EventEnum id, void* pEventData )
+{
+    if( GetFinished() )
+    {
+        MissionObjective::HandleEvent( id, pEventData );
+        return;
+    }
+
+    bool matched = false;
+    if( mDestroyCarsMode && id == EVENT_VEHICLE_DESTROYED )
+    {
+        Vehicle* v = static_cast<Vehicle*>( pEventData );
+        if( v != NULL )
+        {
+            if( mNumTargets == 0 )
+            {
+                matched = true;
+            }
+            else
+            {
+                const char* vName = v->GetName();
+                for( int i = 0; i < mNumTargets; ++i )
+                {
+                    if( vName != NULL && strcmp( vName, mTargetModels[ i ] ) == 0 )
+                    {
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    else if( !mDestroyCarsMode &&
+             ( id == EVENT_KICK_NPC || id == EVENT_PEDESTRIAN_SMACKDOWN || id == EVENT_PLAYER_CAR_HIT_NPC ) )
+    {
+        Character* ch = static_cast<Character*>( pEventData );
+        if( ch != NULL && ( pEventData != mLastHitPtr || ( mElapsedMs - mLastHitTimeMs ) > 250 ) )
+        {
+            const char* modelName = GetCharacterManager()->GetModelName( ch );
+            const char* charName = ch->GetName();
+            if( mNumTargets == 0 )
+            {
+                matched = true;
+            }
+            else
+            {
+                for( int i = 0; i < mNumTargets; ++i )
+                {
+                    if( ( modelName != NULL && strcmp( modelName, mTargetModels[ i ] ) == 0 ) ||
+                        ( charName != NULL && strcmp( charName, mTargetModels[ i ] ) == 0 ) )
+                    {
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+            if( matched )
+            {
+                mLastHitPtr = pEventData;
+                mLastHitTimeMs = mElapsedMs;
+            }
+        }
+    }
+
+    if( matched )
+    {
+        mCount++;
+        if( mCount >= mTotal )
+        {
+            SetFinished( true );
+        }
+    }
+
+    MissionObjective::HandleEvent( id, pEventData );
 }

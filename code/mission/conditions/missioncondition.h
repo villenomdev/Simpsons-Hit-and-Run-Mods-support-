@@ -46,7 +46,9 @@ namespace MissionConditionNames
         "notabducted",
         "hitandruncought",
         "keepbarrel",
-        "getcollectibles"
+        "getcollectibles",
+        "insidetrigger",
+        "destroycars"
     };
 
 }
@@ -74,6 +76,8 @@ public:
         COND_HIT_AND_RUN_CAUGHT,
         COND_KEEP_BARREL,
         COND_GET_COLLECTIBLES,
+        COND_INSIDE_TRIGGER,
+        COND_DESTROY_CARS,
 	    NUM_CONDITIONS
     };
 
@@ -218,5 +222,56 @@ inline void MissionCondition::SetLeaveInterior( bool bIsLeaving )
 {
     mLeaveInterior = bIsLeaving;
 }
+
+class Locator;
+
+class InsideTriggerCondition : public MissionCondition
+{
+public:
+    InsideTriggerCondition();
+    virtual ~InsideTriggerCondition();
+
+    void SetTriggerName( const char* name );
+    void SetThreshold( float seconds ) { mThreshold = seconds; }
+    void SetDecay( float rate, float maxVal ) { mDecayRate = rate; mMaxVal = maxVal; }
+    void SetSound( const char* soundName, const char* triggerType );
+
+    virtual void Update( unsigned int elapsedTime );
+    virtual bool IsClose();
+
+protected:
+    virtual void OnInitialize();
+    virtual void OnFinalize();
+
+private:
+    char mTriggerName[ 64 ];
+    char mSoundName[ 64 ];
+    float mThreshold;
+    float mDecayRate;
+    float mMaxVal;
+    float mTimer;
+    Locator* mLocator;
+    bool mWasActive;
+    bool mSavedActive;
+};
+
+class DestroyCarsCondition : public MissionCondition
+{
+public:
+    DestroyCarsCondition();
+    virtual ~DestroyCarsCondition();
+
+    void AddTargetModel( const char* model );
+    virtual void HandleEvent( EventEnum id, void* pEventData );
+
+protected:
+    virtual void OnInitialize();
+    virtual void OnFinalize();
+
+private:
+    enum { MAX_TARGETS = 8 };
+    char mTargetModels[ MAX_TARGETS ][ 64 ];
+    int mNumTargets;
+};
  
 #endif //MISSIONCONDITION_H

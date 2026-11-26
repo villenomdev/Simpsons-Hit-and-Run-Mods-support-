@@ -123,6 +123,7 @@
 #include <worldsim/traffic/trafficmanager.h>
 #include <worldsim/traffic/trafficmodelgroup.h>
 #include <worldsim/ped/pedestrianmanager.h>
+#include <worldsim/parkedcars/parkedcarmanager.h>
 #include <worldsim/coins/coinmanager.h>
 #include <worldsim/coins/sparkle.h>
 
@@ -607,6 +608,63 @@ void MissionScriptLoader::Register()
 
     console->AddFunction( "ActivateTrigger", ActivateTrigger, "", 1, 1 ); //Activate a locator ( locator name )
     console->AddFunction( "DeactivateTrigger", DeactivateTrigger, "", 1, 1 ); //Deactivate a locator ( locator name )
+    console->AddFunction( "DisableTrigger", DisableTrigger, "", 1, 1 );
+
+    // Lucas Mod Launcher script extensions
+    console->AddFunction( "AddStageVehicleCharacter", AddStageVehicleCharacter, "", 2, 4 );
+    console->AddFunction( "RemoveStageVehicleCharacter", RemoveStageVehicleCharacter, "", 2, 2 );
+    console->AddFunction( "IfCurrentCheckpoint", IfCurrentCheckpoint, "", 0, 0 );
+    console->AddFunction( "CHECKPOINT_HERE", CheckpointHere, "", 0, 0 );
+    console->AddFunction( "SetCheckpointResetPlayerInCar", SetCheckpointResetPlayerInCar, "", 1, 1 );
+    console->AddFunction( "SetCheckpointResetPlayerOutCar", SetCheckpointResetPlayerOutCar, "", 2, 2 );
+    console->AddFunction( "SetCheckpointDynaLoadData", SetCheckpointDynaLoadData, "", 1, 2 );
+    console->AddFunction( "SetCheckpointPedGroup", SetCheckpointPedGroup, "", 1, 1 );
+    console->AddFunction( "SetCheckpointTrafficGroup", SetCheckpointTrafficGroup, "", 1, 1 );
+    console->AddFunction( "SetParkedCarsEnabled", SetParkedCarsEnabled, "", 1, 1 );
+    console->AddFunction( "SetPedsEnabled", SetPedsEnabled, "", 1, 1 );
+    console->AddFunction( "SetStageHitAndRun", SetStageHitAndRun, "", 1, 1 );
+    console->AddFunction( "ResetStageHitAndRun", ResetStageHitAndRun, "", 0, 0 );
+    console->AddFunction( "SetNoHitAndRunMusicForStage", SetNoHitAndRunMusicForStage, "", 0, 0 );
+    console->AddFunction( "SetStageHitAndRunDecay", SetStageHitAndRunDecay, "", 1, 1 );
+    console->AddFunction( "SetStageHitAndRunDecayHitAndRun", SetStageHitAndRunDecayHitAndRun, "", 1, 1 );
+    console->AddFunction( "SetStageHitAndRunDecayInterior", SetStageHitAndRunDecayInterior, "", 1, 1 );
+    console->AddFunction( "SetStageHitAndRunFine", SetStageHitAndRunFine, "", 1, 1 );
+    console->AddFunction( "SetStageAllowMissionCancel", SetStageAllowMissionCancel, "", 1, 1 );
+    console->AddFunction( "SetStageCharacterModel", SetStageCharacterModel, "", 1, 2 );
+    console->AddFunction( "SetStagePayout", SetStagePayout, "", 1, 1 );
+    console->AddFunction( "SetStageVehicleReset", SetStageVehicleReset, "", 1, 2 );
+    console->AddFunction( "SetStageVehicleNoDestroyedJumpOut", LmlNoOp, "", 1, 2 );
+    console->AddFunction( "SetStageVehicleAllowSeatSlide", LmlNoOp, "", 1, 2 );
+    console->AddFunction( "SetStageVehicleCharacterAnimation", LmlNoOp, "", 2, 4 );
+    console->AddFunction( "SetStageVehicleCharacterJumpOut", LmlNoOp, "", 2, 3 );
+    console->AddFunction( "SetStageVehicleCharacterScale", LmlNoOp, "", 2, 3 );
+    console->AddFunction( "SetStageVehicleCharacterVisible", LmlNoOp, "", 2, 3 );
+    console->AddFunction( "SetObjTrigger", SetObjTrigger, "", 1, 1 );
+    console->AddFunction( "SetObjCameraName", SetObjCameraName, "", 1, 1 );
+    console->AddFunction( "SetObjMulticontName", SetObjMulticontName, "", 1, 1 );
+    console->AddFunction( "SetObjCanSkip", SetObjCanSkip, "", 1, 1 );
+    console->AddFunction( "AddObjTargetModel", AddObjTargetModel, "", 1, 1 );
+    console->AddFunction( "SetObjTotal", SetObjTotal, "", 1, 1 );
+    console->AddFunction( "SetCollectibleSoundEffect", LmlNoOp, "", 1, 2 );
+    console->AddFunction( "SetObjDecay", LmlNoOp, "", 1, 2 );
+    console->AddFunction( "SetObjExplosion", LmlNoOp, "", 1, 2 );
+    console->AddFunction( "SetObjMessageIndex", LmlNoOp, "", 1, 1 );
+    console->AddFunction( "SetObjNoLetterbox", LmlNoOp, "", 0, 1 );
+    console->AddFunction( "SetObjSound", LmlNoOp, "", 1, 2 );
+    console->AddFunction( "SetObjSpeedKMH", LmlNoOp, "", 1, 2 );
+    console->AddFunction( "SetObjThreshold", LmlNoOp, "", 1, 1 );
+    console->AddFunction( "SetObjUseCameraPosition", LmlNoOp, "", 1, 3 );
+    console->AddFunction( "SetCondTrigger", SetCondTrigger, "", 1, 1 );
+    console->AddFunction( "SetCondThreshold", SetCondThreshold, "", 1, 1 );
+    console->AddFunction( "SetCondDecay", SetCondDecay, "", 1, 2 );
+    console->AddFunction( "SetCondSound", SetCondSound, "", 1, 2 );
+    console->AddFunction( "AddCondTargetModel", AddCondTargetModel, "", 1, 1 );
+    console->AddFunction( "SetCondDelay", LmlNoOp, "", 1, 1 );
+    console->AddFunction( "SetCondDisplay", LmlNoOp, "", 1, 1 );
+    console->AddFunction( "SetCondMessageIndex", LmlNoOp, "", 1, 1 );
+    console->AddFunction( "SetCondSpeedRangeKMH", LmlNoOp, "", 2, 2 );
+    console->AddFunction( "SetCondTotal", LmlNoOp, "", 1, 1 );
+    console->AddFunction( "SetConditionalParameter", LmlNoOp, "", 4, 6 );
 
     //
     // Oh, that's a creative name. Like, duh.
@@ -1751,6 +1809,31 @@ MEMTRACK_PUSH_GROUP( "Mission - Objectives" );
             spInstance->mpObjective = pGoOutSide;
 
 
+            break;
+        }
+    case MissionObjective::OBJ_INSIDE_TRIGGER:
+        {
+            spInstance->mpObjective = new TriggerObjective( true );
+            break;
+        }
+    case MissionObjective::OBJ_OUTSIDE_TRIGGER:
+        {
+            spInstance->mpObjective = new TriggerObjective( false );
+            break;
+        }
+    case MissionObjective::OBJ_CAMERA:
+        {
+            spInstance->mpObjective = new CameraObjective();
+            break;
+        }
+    case MissionObjective::OBJ_HIT_PEDS:
+        {
+            spInstance->mpObjective = new MultiTargetObjective( false );
+            break;
+        }
+    case MissionObjective::OBJ_DESTROY_CARS:
+        {
+            spInstance->mpObjective = new MultiTargetObjective( true );
             break;
         }
     default:
@@ -2972,6 +3055,16 @@ MEMTRACK_PUSH_GROUP( "Mission - Conditions" );
                 kbc->JumpBackBy( atoi( argv[2] ) );
             }
 
+            break;
+        }
+    case MissionCondition::COND_INSIDE_TRIGGER:
+        {
+            spInstance->mpCondition = new InsideTriggerCondition();
+            break;
+        }
+    case MissionCondition::COND_DESTROY_CARS:
+        {
+            spInstance->mpCondition = new DestroyCarsCondition();
             break;
         }
     default:
@@ -5758,5 +5851,387 @@ void MissionScriptLoader::AllowMissionAbort(int argc, const char** argv)
 
     bool allowMissionAbort = (strcmp( argv[ 1 ], "false" ) != 0);
     spInstance->mpStage->SetMissionAbortEnabled( allowMissionAbort );
+}
+
+//=============================================================================
+// Lucas Mod Launcher command handlers
+//=============================================================================
+void MissionScriptLoader::DisableTrigger( int argc, const char** argv )
+{
+    if ( argc < 2 || argv[ 1 ] == NULL || spInstance == NULL )
+    {
+        return;
+    }
+    if ( spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->AddDisabledTrigger( argv[ 1 ] );
+    }
+    else
+    {
+        Locator* loc = p3d::find<Locator>( argv[ 1 ] );
+        if ( loc != NULL )
+        {
+            loc->SetFlag( Locator::ACTIVE, false );
+        }
+    }
+}
+
+void MissionScriptLoader::AddStageVehicleCharacter( int argc, const char** argv )
+{
+    if ( argc >= 3 && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->AddStageVehicleCharacter( argv[ 1 ], argv[ 2 ] );
+    }
+}
+
+void MissionScriptLoader::RemoveStageVehicleCharacter( int argc, const char** argv )
+{
+    if ( argc >= 3 && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->RemoveStageVehicleCharacter( argv[ 1 ], argv[ 2 ] );
+    }
+}
+
+bool MissionScriptLoader::IfCurrentCheckpoint( int argc, const char** argv )
+{
+    return false;
+}
+
+void MissionScriptLoader::CheckpointHere( int argc, const char** argv )
+{
+    if ( spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetIsCheckpoint( true );
+    }
+}
+
+void MissionScriptLoader::SetCheckpointResetPlayerInCar( int argc, const char** argv )
+{
+    if ( argc < 2 || argv[ 1 ] == NULL || spInstance == NULL || spInstance->mpStage == NULL )
+    {
+        return;
+    }
+    CarStartLocator* loc = p3d::find<CarStartLocator>( argv[ 1 ] );
+    if ( loc == NULL )
+    {
+        if ( strcmp( argv[ 1 ], "level_carstart" ) == 0 )
+        {
+            loc = p3d::find<CarStartLocator>( "level1_carstart" );
+        }
+        else if ( strcmp( argv[ 1 ], "level1_carstart" ) == 0 )
+        {
+            loc = p3d::find<CarStartLocator>( "level_carstart" );
+        }
+    }
+    if ( loc != NULL )
+    {
+        spInstance->mpStage->SetCheckpointVehicleRestart( loc );
+    }
+}
+
+void MissionScriptLoader::SetCheckpointResetPlayerOutCar( int argc, const char** argv )
+{
+    if ( argc < 3 || argv[ 1 ] == NULL || argv[ 2 ] == NULL || spInstance == NULL || spInstance->mpStage == NULL )
+    {
+        return;
+    }
+    Locator* playerLoc = p3d::find<Locator>( argv[ 1 ] );
+    CarStartLocator* vehicleLoc = p3d::find<CarStartLocator>( argv[ 2 ] );
+    if ( playerLoc != NULL )
+    {
+        spInstance->mpStage->SetCheckpointPlayerRestart( playerLoc );
+    }
+    if ( vehicleLoc != NULL )
+    {
+        spInstance->mpStage->SetCheckpointVehicleRestart( vehicleLoc );
+    }
+}
+
+void MissionScriptLoader::SetCheckpointDynaLoadData( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetCheckpointDynaLoadData( argv[ 1 ] );
+    }
+}
+
+void MissionScriptLoader::SetCheckpointPedGroup( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetCheckpointPedGroup( atoi( argv[ 1 ] ) );
+    }
+}
+
+void MissionScriptLoader::SetCheckpointTrafficGroup( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetCheckpointTrafficGroup( atoi( argv[ 1 ] ) );
+    }
+}
+
+void MissionScriptLoader::SetParkedCarsEnabled( int argc, const char** argv )
+{
+    if ( argc < 2 || argv[ 1 ] == NULL )
+    {
+        return;
+    }
+    bool enabled = ( atoi( argv[ 1 ] ) != 0 && strcmp( argv[ 1 ], "false" ) != 0 );
+    if ( spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetStageParkedCarsEnabled( enabled ? 1 : 0 );
+    }
+    else
+    {
+        if ( enabled )
+        {
+            GetPCM().EnableParkedCars();
+        }
+        else
+        {
+            GetPCM().DisableParkedCars();
+        }
+    }
+}
+
+void MissionScriptLoader::SetPedsEnabled( int argc, const char** argv )
+{
+    if ( argc < 2 || argv[ 1 ] == NULL )
+    {
+        return;
+    }
+    bool enabled = ( atoi( argv[ 1 ] ) != 0 && strcmp( argv[ 1 ], "false" ) != 0 );
+    if ( spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetStagePedsEnabled( enabled ? 1 : 0 );
+    }
+    else if ( PedestrianManager::GetInstance() != NULL )
+    {
+        PedestrianManager::GetInstance()->AllowAddingPeds( enabled );
+    }
+}
+
+void MissionScriptLoader::SetStageHitAndRun( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetStageHitAndRun( atoi( argv[ 1 ] ) );
+    }
+}
+
+void MissionScriptLoader::ResetStageHitAndRun( int argc, const char** argv )
+{
+    if ( spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->ResetStageHitAndRun();
+    }
+}
+
+void MissionScriptLoader::SetNoHitAndRunMusicForStage( int argc, const char** argv )
+{
+    if ( spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetNoHitAndRunMusicForStage();
+    }
+}
+
+void MissionScriptLoader::SetStageHitAndRunDecay( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetStageHitAndRunDecay( static_cast<float>( atof( argv[ 1 ] ) ) );
+    }
+}
+
+void MissionScriptLoader::SetStageHitAndRunDecayHitAndRun( int argc, const char** argv )
+{
+}
+
+void MissionScriptLoader::SetStageHitAndRunDecayInterior( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetStageHitAndRunDecayInterior( static_cast<float>( atof( argv[ 1 ] ) ) );
+    }
+}
+
+void MissionScriptLoader::SetStageHitAndRunFine( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetStageHitAndRunFine( atoi( argv[ 1 ] ) );
+    }
+}
+
+void MissionScriptLoader::SetStageAllowMissionCancel( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        bool allow = ( atoi( argv[ 1 ] ) != 0 && strcmp( argv[ 1 ], "false" ) != 0 );
+        spInstance->mpStage->SetMissionAbortEnabled( allow );
+    }
+}
+
+void MissionScriptLoader::SetStageCharacterModel( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetStageCharacterModel( argv[ 1 ] );
+    }
+}
+
+void MissionScriptLoader::SetStagePayout( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetStagePayout( atoi( argv[ 1 ] ) );
+    }
+}
+
+void MissionScriptLoader::SetStageVehicleReset( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpStage != NULL )
+    {
+        spInstance->mpStage->SetStageVehicleReset( argv[ 1 ] );
+    }
+}
+
+void MissionScriptLoader::SetObjTrigger( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpObjective != NULL )
+    {
+        TriggerObjective* obj = dynamic_cast<TriggerObjective*>( spInstance->mpObjective );
+        if ( obj != NULL )
+        {
+            obj->SetTriggerName( argv[ 1 ] );
+        }
+    }
+}
+
+void MissionScriptLoader::SetObjCameraName( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpObjective != NULL )
+    {
+        CameraObjective* obj = dynamic_cast<CameraObjective*>( spInstance->mpObjective );
+        if ( obj != NULL )
+        {
+            obj->SetCameraName( argv[ 1 ] );
+        }
+    }
+}
+
+void MissionScriptLoader::SetObjMulticontName( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpObjective != NULL )
+    {
+        CameraObjective* obj = dynamic_cast<CameraObjective*>( spInstance->mpObjective );
+        if ( obj != NULL )
+        {
+            obj->SetMulticontName( argv[ 1 ] );
+        }
+    }
+}
+
+void MissionScriptLoader::SetObjCanSkip( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpObjective != NULL )
+    {
+        CameraObjective* obj = dynamic_cast<CameraObjective*>( spInstance->mpObjective );
+        if ( obj != NULL )
+        {
+            obj->SetCanSkip( atoi( argv[ 1 ] ) != 0 && strcmp( argv[ 1 ], "false" ) != 0 );
+        }
+    }
+}
+
+void MissionScriptLoader::AddObjTargetModel( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpObjective != NULL )
+    {
+        MultiTargetObjective* obj = dynamic_cast<MultiTargetObjective*>( spInstance->mpObjective );
+        if ( obj != NULL )
+        {
+            obj->AddTargetModel( argv[ 1 ] );
+        }
+    }
+}
+
+void MissionScriptLoader::SetObjTotal( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpObjective != NULL )
+    {
+        MultiTargetObjective* obj = dynamic_cast<MultiTargetObjective*>( spInstance->mpObjective );
+        if ( obj != NULL )
+        {
+            obj->SetTotal( atoi( argv[ 1 ] ) );
+        }
+    }
+}
+
+void MissionScriptLoader::SetCondTrigger( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpCondition != NULL )
+    {
+        InsideTriggerCondition* cond = dynamic_cast<InsideTriggerCondition*>( spInstance->mpCondition );
+        if ( cond != NULL )
+        {
+            cond->SetTriggerName( argv[ 1 ] );
+        }
+    }
+}
+
+void MissionScriptLoader::SetCondThreshold( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpCondition != NULL )
+    {
+        InsideTriggerCondition* cond = dynamic_cast<InsideTriggerCondition*>( spInstance->mpCondition );
+        if ( cond != NULL )
+        {
+            cond->SetThreshold( static_cast<float>( atof( argv[ 1 ] ) ) );
+        }
+    }
+}
+
+void MissionScriptLoader::SetCondDecay( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpCondition != NULL )
+    {
+        InsideTriggerCondition* cond = dynamic_cast<InsideTriggerCondition*>( spInstance->mpCondition );
+        if ( cond != NULL )
+        {
+            float rate = static_cast<float>( atof( argv[ 1 ] ) );
+            float maxVal = ( argc >= 3 && argv[ 2 ] != NULL ) ? static_cast<float>( atof( argv[ 2 ] ) ) : 0.0f;
+            cond->SetDecay( rate, maxVal );
+        }
+    }
+}
+
+void MissionScriptLoader::SetCondSound( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpCondition != NULL )
+    {
+        InsideTriggerCondition* cond = dynamic_cast<InsideTriggerCondition*>( spInstance->mpCondition );
+        if ( cond != NULL )
+        {
+            cond->SetSound( argv[ 1 ], ( argc >= 3 && argv[ 2 ] != NULL ) ? argv[ 2 ] : "" );
+        }
+    }
+}
+
+void MissionScriptLoader::AddCondTargetModel( int argc, const char** argv )
+{
+    if ( argc >= 2 && argv[ 1 ] != NULL && spInstance != NULL && spInstance->mpCondition != NULL )
+    {
+        DestroyCarsCondition* cond = dynamic_cast<DestroyCarsCondition*>( spInstance->mpCondition );
+        if ( cond != NULL )
+        {
+            cond->AddTargetModel( argv[ 1 ] );
+        }
+    }
+}
+
+void MissionScriptLoader::LmlNoOp( int argc, const char** argv )
+{
 }
 

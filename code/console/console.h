@@ -147,8 +147,8 @@ class Console : public LoadingManager::ProcessRequestsCallback
         enum
         {
             MAX_STRING_LENGTH = 256,
-            MAX_FUNCTIONS = 256,
-            MAX_FUNCTION_NAME = 32,
+            MAX_FUNCTIONS = 512,
+            MAX_FUNCTION_NAME = 64,
             MAX_HELP_LENGTH = 256,
             MAX_ALIAS_NAME = 32,
             MAX_ARGS = 16,

@@ -330,6 +330,38 @@ public:
     void SetMissionAbortEnabled( bool isEnabled );
     bool IsMissionAbortAllowed() const;
 
+    // Lucas Mod Launcher stage extensions
+    void AddDisabledTrigger( const char* name );
+    bool IsTriggerDisabled( const char* name ) const;
+
+    void AddStageVehicleCharacter( const char* vehicleName, const char* charName );
+    void RemoveStageVehicleCharacter( const char* vehicleName, const char* charName );
+
+    void SetIsCheckpoint( bool isCheckpoint ) { mbIsCheckpoint = isCheckpoint; }
+    bool IsCheckpoint() const { return mbIsCheckpoint; }
+    void SetCheckpointVehicleRestart( CarStartLocator* loc );
+    CarStartLocator* GetCheckpointVehicleRestart() const { return mpCheckpointVehicleRestart; }
+    void SetCheckpointPlayerRestart( Locator* loc );
+    Locator* GetCheckpointPlayerRestart() const { return mpCheckpointPlayerRestart; }
+    void SetCheckpointDynaLoadData( const char* data );
+    const char* GetCheckpointDynaLoadData() const { return mCheckpointDynaLoadData; }
+    void SetCheckpointPedGroup( int groupId ) { mCheckpointPedGroup = groupId; }
+    int GetCheckpointPedGroup() const { return mCheckpointPedGroup; }
+    void SetCheckpointTrafficGroup( int groupId ) { mCheckpointTrafficGroup = groupId; }
+    int GetCheckpointTrafficGroup() const { return mCheckpointTrafficGroup; }
+
+    void SetStageHitAndRun( int value ) { mStageHitAndRunValue = value; }
+    void ResetStageHitAndRun() { mbResetStageHitAndRun = true; }
+    void SetNoHitAndRunMusicForStage() { mbNoHitAndRunMusicForStage = true; }
+    void SetStageHitAndRunDecay( float rate ) { mStageHitAndRunDecay = rate; }
+    void SetStageHitAndRunDecayInterior( float rate ) { mStageHitAndRunDecayInterior = rate; }
+    void SetStageHitAndRunFine( int fine ) { mStageHitAndRunFine = fine; }
+    void SetStagePayout( int payout ) { mStagePayout = payout; }
+    void SetStageCharacterModel( const char* model );
+    void SetStageParkedCarsEnabled( int enabled ) { mStageParkedCarsEnabled = enabled; }
+    void SetStagePedsEnabled( int enabled ) { mStagePedsEnabled = enabled; }
+    void SetStageVehicleReset( const char* vehicleName );
+
     //Chuck dirty pulbic var
     bool mbStayBlackForStage;
     bool mbDisablePlayerControlForCountDown;
@@ -511,6 +543,53 @@ private:
 
     bool mAllowMissionAbort : 1;
     int mResetCounter;
+
+    static const int MAX_DISABLED_TRIGGERS = 16;
+    struct DisabledTriggerInfo
+    {
+        DisabledTriggerInfo() : applied( false ), wasActive( true ) { name[0] = '\0'; }
+        char name[ 64 ];
+        bool applied;
+        bool wasActive;
+    };
+    int mNumDisabledTriggers;
+    DisabledTriggerInfo mDisabledTriggers[ MAX_DISABLED_TRIGGERS ];
+
+    static const int MAX_STAGE_VEHICLE_CHARS = 6;
+    struct StageVehicleCharInfo
+    {
+        StageVehicleCharInfo() : remove( false ) { vehicleName[0] = '\0'; charName[0] = '\0'; }
+        char vehicleName[ 32 ];
+        char charName[ 32 ];
+        bool remove;
+    };
+    int mNumStageVehicleChars;
+    StageVehicleCharInfo mStageVehicleChars[ MAX_STAGE_VEHICLE_CHARS ];
+
+    bool mbIsCheckpoint;
+    CarStartLocator* mpCheckpointVehicleRestart;
+    Locator* mpCheckpointPlayerRestart;
+    char mCheckpointDynaLoadData[ 128 ];
+    int mCheckpointPedGroup;
+    int mCheckpointTrafficGroup;
+
+    int mStageHitAndRunValue;
+    bool mbResetStageHitAndRun;
+    bool mbNoHitAndRunMusicForStage;
+    float mStageHitAndRunDecay;
+    float mStageHitAndRunDecayInterior;
+    float mSavedHitnRunDecay;
+    float mSavedHitnRunDecayInterior;
+    int mStageHitAndRunFine;
+    int mStagePayout;
+    char mStageCharacterModel[ 32 ];
+    int mStageParkedCarsEnabled;
+    int mStagePedsEnabled;
+    char mStageVehicleResetName[ 32 ];
+
+    void ApplyDisabledTriggers();
+    void RestoreDisabledTriggers();
+    void ApplyStageVehicleCharacters();
 
 };
 

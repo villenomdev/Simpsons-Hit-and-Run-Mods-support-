@@ -67,6 +67,16 @@
         s_pRadSdlDriveLogHook = hook;
     }
 
+    extern "C" void RadSdlDrive_LogFileNotFound( const char* fileName )
+    {
+        if( s_pRadSdlDriveLogHook != NULL && fileName != NULL )
+        {
+            char failBuf[ 512 ];
+            snprintf( failBuf, sizeof( failBuf ), "File not found on disk or in RCF: '%s'", fileName );
+            s_pRadSdlDriveLogHook( "FileIO", failBuf );
+        }
+    }
+
     static void SdlDriveLog( const char* fmt, ... )
     {
         char buffer[ 1024 ];
@@ -1923,11 +1933,14 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
     else
     {
 #if defined(RAD_ANDROID)
-        if( s_pRadSdlDriveLogHook != NULL )
+        // Read misses on loose disk normally fall back to radCementLibraryAfterDrive (.rcf);
+        // FileOpenRequest logs genuinely missing files after RCF lookup fails. Only log write open failures here.
+        if( s_pRadSdlDriveLogHook != NULL && createFlags != NULL &&
+            ( strchr( createFlags, 'w' ) != NULL || strchr( createFlags, '+' ) != NULL ) )
         {
             char failBuf[ 512 ];
-            snprintf( failBuf, sizeof( failBuf ), "Failed to open file: '%s' (full path: '%s', mode: '%s', SDL_Error: '%s')",
-                      fileName ? fileName : "(null)", fullName, createFlags ? createFlags : "(null)", SDL_GetError() );
+            snprintf( failBuf, sizeof( failBuf ), "Failed to open file for write: '%s' (full path: '%s', mode: '%s', SDL_Error: '%s')",
+                      fileName ? fileName : "(null)", fullName, createFlags, SDL_GetError() );
             s_pRadSdlDriveLogHook( "FileIO", failBuf );
         }
 #endif

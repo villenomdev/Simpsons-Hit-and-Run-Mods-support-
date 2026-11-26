@@ -27,6 +27,10 @@
 #include "instancedrive.hpp"
 #include "file.hpp"
 
+#if defined(RAD_ANDROID)
+extern "C" void RadSdlDrive_LogFileNotFound( const char* fileName );
+#endif
+
 //=============================================================================
 // Static Data Definitions
 //=============================================================================
@@ -533,6 +537,18 @@ radDrive::CompletionStatus FileOpenRequest::DoRequest( void )
     //
     // Return the status. This will be FileNotFound or a real error.
     //
+#if defined(RAD_ANDROID)
+    if( status != radDrive::Complete && m_pFile != NULL && m_pFile->m_Filename != NULL )
+    {
+        // Save1..Save4 existence probes routinely miss empty slots; don't spam FileIO ERROR for them.
+        const char* fname = m_pFile->m_Filename;
+        bool isSaveProbe = ( strncmp( fname, "Save", 4 ) == 0 && fname[4] >= '0' && fname[4] <= '9' );
+        if( !isSaveProbe )
+        {
+            RadSdlDrive_LogFileNotFound( fname );
+        }
+    }
+#endif
     return handleError( status, pDrive->GetLastError( ) );
 }
 

@@ -22,6 +22,7 @@
 #include <contexts/context.h>
 #include <gameflow/gameflow.h>
 
+#include <ai/state.h>
 #include <ai/vehicle/chaseai.h>
 #include <ai/vehicle/vehicleai.h>
 #include <ai/vehicle/waypointai.h>
@@ -66,6 +67,11 @@
 
 #include <worldsim/traffic/trafficmanager.h>
 #include <worldsim/coins/coinmanager.h>
+#include <worldsim/worldphysicsmanager.h>
+#include <worldsim/ped/pedestrianmanager.h>
+#include <worldsim/parkedcars/parkedcarmanager.h>
+#include <worldsim/avatar.h>
+#include <p3d/utility.hpp>
 #include <worldsim/redbrick/vehiclecontroller/humanvehiclecontroller.h>
 #include <worldsim/redbrick/vehiclecontroller/vehiclemappable.h>
 
@@ -132,7 +138,25 @@ MissionStage::MissionStage() :
     mNumCountdownSequenceUnits( 0 ),
     mCountdownDialogKey( 0 ),
     mSecondSpeakerUID( 0 ),
-    mAllowMissionAbort( true )
+    mAllowMissionAbort( true ),
+    mNumDisabledTriggers( 0 ),
+    mNumStageVehicleChars( 0 ),
+    mbIsCheckpoint( false ),
+    mpCheckpointVehicleRestart( NULL ),
+    mpCheckpointPlayerRestart( NULL ),
+    mCheckpointPedGroup( -1 ),
+    mCheckpointTrafficGroup( -1 ),
+    mStageHitAndRunValue( -1 ),
+    mbResetStageHitAndRun( false ),
+    mbNoHitAndRunMusicForStage( false ),
+    mStageHitAndRunDecay( -1.0f ),
+    mStageHitAndRunDecayInterior( -1.0f ),
+    mSavedHitnRunDecay( -1.0f ),
+    mSavedHitnRunDecayInterior( -1.0f ),
+    mStageHitAndRunFine( -1 ),
+    mStagePayout( 0 ),
+    mStageParkedCarsEnabled( -1 ),
+    mStagePedsEnabled( -1 )
 {
 #ifdef RAD_DEBUG
     static int count = 0;
@@ -191,6 +215,9 @@ MissionStage::MissionStage() :
     strcpy(mPlayerRespawnLocatorName,"NULL");
     strcpy(mPlayerCarRespawnLocatorName,"NULL");
     strcpy(mCharacterToHide,"NULL");
+    mCheckpointDynaLoadData[0] = '\0';
+    mStageCharacterModel[0] = '\0';
+    mStageVehicleResetName[0] = '\0';
     mbLevelOver =false;
     mbGameOver = false;
     mResetCounter = 0;
@@ -291,6 +318,17 @@ MissionStage::~MissionStage()
             //mCharacters[ i ].vehicle->Release();
             mCharacters[ i ].vehicle = NULL;
         }
+    }
+    RestoreDisabledTriggers();
+    if ( mpCheckpointVehicleRestart != NULL )
+    {
+        mpCheckpointVehicleRestart->Release();
+        mpCheckpointVehicleRestart = NULL;
+    }
+    if ( mpCheckpointPlayerRestart != NULL )
+    {
+        mpCheckpointPlayerRestart->Release();
+        mpCheckpointPlayerRestart = NULL;
     }
     DestroyAllSafeZones();
 }
@@ -889,6 +927,17 @@ void MissionStage::Finalize()
     {
         GetHitnRunManager()->EnableHitnRun();
     }
+    if ( mSavedHitnRunDecay >= 0.0f )
+    {
+        GetHitnRunManager()->SetDecayRate( mSavedHitnRunDecay );
+        mSavedHitnRunDecay = -1.0f;
+    }
+    if ( mSavedHitnRunDecayInterior >= 0.0f )
+    {
+        GetHitnRunManager()->SetDecayRateInside( mSavedHitnRunDecayInterior );
+        mSavedHitnRunDecayInterior = -1.0f;
+    }
+    RestoreDisabledTriggers();
 
     //hide character.
      if(strcmp(mCharacterToHide,"NULL") != 0)
@@ -1094,6 +1143,53 @@ void MissionStage::Reset()
     {
         GetHitnRunManager()->DisableHitnRun();
     }
+    else
+    {
+        if ( mbResetStageHitAndRun )
+        {
+            GetHitnRunManager()->ResetState();
+        }
+        if ( mStageHitAndRunValue >= 0 )
+        {
+            GetHitnRunManager()->SetHitnRunValue( static_cast<float>( mStageHitAndRunValue ) );
+        }
+    }
+    if ( mStageHitAndRunDecay >= 0.0f )
+    {
+        if ( mSavedHitnRunDecay < 0.0f )
+        {
+            mSavedHitnRunDecay = GetHitnRunManager()->GetDecayRate();
+        }
+        GetHitnRunManager()->SetDecayRate( mStageHitAndRunDecay );
+    }
+    if ( mStageHitAndRunDecayInterior >= 0.0f )
+    {
+        if ( mSavedHitnRunDecayInterior < 0.0f )
+        {
+            mSavedHitnRunDecayInterior = GetHitnRunManager()->GetDecayRateInside();
+        }
+        GetHitnRunManager()->SetDecayRateInside( mStageHitAndRunDecayInterior );
+    }
+
+    ApplyDisabledTriggers();
+
+    if ( mStageParkedCarsEnabled == 0 )
+    {
+        GetPCM().DisableParkedCars();
+    }
+    else if ( mStageParkedCarsEnabled == 1 )
+    {
+        GetPCM().EnableParkedCars();
+    }
+
+    if ( mStagePedsEnabled == 0 )
+    {
+        PedestrianManager::GetInstance()->AllowAddingPeds( false );
+    }
+    else if ( mStagePedsEnabled == 1 )
+    {
+        PedestrianManager::GetInstance()->AllowAddingPeds( true );
+    }
     
 	for ( i=0;i<MAX_CHASE_STRUCTS;i++)
 	{
@@ -1223,6 +1319,28 @@ void MissionStage::Reset()
 
     //The Character is likely moved from into to out of car or vice versa.
     GetEventManager()->TriggerEvent( EVENT_CHARACTER_POS_RESET );
+
+    if ( mStageCharacterModel[0] != '\0' )
+    {
+        Character* player = GetCharacterManager()->GetCharacter( 0 );
+        if ( player != NULL && GetCharacterManager()->IsModelLoaded( mStageCharacterModel ) )
+        {
+            GetCharacterManager()->SwapData( player, mStageCharacterModel, GetCharacterManager()->GetAnimName( player ) );
+        }
+    }
+
+    if ( mStageVehicleResetName[0] != '\0' )
+    {
+        Vehicle* v = (strcmp( mStageVehicleResetName, "current" ) == 0) ?
+            GetGameplayManager()->GetCurrentVehicle() :
+            GetGameplayManager()->GetMissionVehicleByName( mStageVehicleResetName );
+        if ( v != NULL )
+        {
+            v->Reset( false );
+        }
+    }
+
+    ApplyStageVehicleCharacters();
 
     mObjective->Initialize();   
 
@@ -2439,6 +2557,10 @@ void MissionStage::SetmsPlayerCarRespawnLocatorName(const char* locatorName)
 
 void MissionStage::OnStageCompleteSuccessful()
 {
+    if ( mStagePayout > 0 )
+    {
+        GetCoinManager()->AdjustBankValue( mStagePayout );
+    }
     HasPresentationInfo::OnStageCompleteSuccessful();
 }
 
@@ -2541,6 +2663,220 @@ Vehicle* MissionStage::GetMainAIVehicleForThisStage()
     }
     //return NULL as a fall back.
     return NULL;
+}
+
+void MissionStage::AddDisabledTrigger( const char* name )
+{
+    if ( name == NULL || name[0] == '\0' )
+    {
+        return;
+    }
+    for ( int i = 0; i < mNumDisabledTriggers; ++i )
+    {
+        if ( strcmp( mDisabledTriggers[i].name, name ) == 0 )
+        {
+            return;
+        }
+    }
+    if ( mNumDisabledTriggers < MAX_DISABLED_TRIGGERS )
+    {
+        strncpy( mDisabledTriggers[ mNumDisabledTriggers ].name, name, sizeof( mDisabledTriggers[0].name ) - 1 );
+        mDisabledTriggers[ mNumDisabledTriggers ].name[ sizeof( mDisabledTriggers[0].name ) - 1 ] = '\0';
+        mDisabledTriggers[ mNumDisabledTriggers ].applied = false;
+        mDisabledTriggers[ mNumDisabledTriggers ].wasActive = true;
+        mNumDisabledTriggers++;
+    }
+}
+
+bool MissionStage::IsTriggerDisabled( const char* name ) const
+{
+    if ( name == NULL || name[0] == '\0' )
+    {
+        return false;
+    }
+    for ( int i = 0; i < mNumDisabledTriggers; ++i )
+    {
+        if ( strcmp( mDisabledTriggers[i].name, name ) == 0 )
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void MissionStage::ApplyDisabledTriggers()
+{
+    for ( int i = 0; i < mNumDisabledTriggers; ++i )
+    {
+        Locator* loc = p3d::find<Locator>( mDisabledTriggers[i].name );
+        if ( loc != NULL )
+        {
+            if ( !mDisabledTriggers[i].applied )
+            {
+                mDisabledTriggers[i].wasActive = loc->GetFlag( Locator::ACTIVE );
+                mDisabledTriggers[i].applied = true;
+            }
+            loc->SetFlag( Locator::ACTIVE, false );
+        }
+    }
+}
+
+void MissionStage::RestoreDisabledTriggers()
+{
+    for ( int i = 0; i < mNumDisabledTriggers; ++i )
+    {
+        if ( mDisabledTriggers[i].applied )
+        {
+            Locator* loc = p3d::find<Locator>( mDisabledTriggers[i].name );
+            if ( loc != NULL )
+            {
+                loc->SetFlag( Locator::ACTIVE, mDisabledTriggers[i].wasActive );
+            }
+            mDisabledTriggers[i].applied = false;
+        }
+    }
+}
+
+void MissionStage::AddStageVehicleCharacter( const char* vehicleName, const char* charName )
+{
+    if ( vehicleName == NULL || charName == NULL || mNumStageVehicleChars >= MAX_STAGE_VEHICLE_CHARS )
+    {
+        return;
+    }
+    StageVehicleCharInfo& info = mStageVehicleChars[ mNumStageVehicleChars ];
+    strncpy( info.vehicleName, vehicleName, sizeof( info.vehicleName ) - 1 );
+    info.vehicleName[ sizeof( info.vehicleName ) - 1 ] = '\0';
+    strncpy( info.charName, charName, sizeof( info.charName ) - 1 );
+    info.charName[ sizeof( info.charName ) - 1 ] = '\0';
+    info.remove = false;
+    mNumStageVehicleChars++;
+}
+
+void MissionStage::RemoveStageVehicleCharacter( const char* vehicleName, const char* charName )
+{
+    if ( vehicleName == NULL || charName == NULL || mNumStageVehicleChars >= MAX_STAGE_VEHICLE_CHARS )
+    {
+        return;
+    }
+    StageVehicleCharInfo& info = mStageVehicleChars[ mNumStageVehicleChars ];
+    strncpy( info.vehicleName, vehicleName, sizeof( info.vehicleName ) - 1 );
+    info.vehicleName[ sizeof( info.vehicleName ) - 1 ] = '\0';
+    strncpy( info.charName, charName, sizeof( info.charName ) - 1 );
+    info.charName[ sizeof( info.charName ) - 1 ] = '\0';
+    info.remove = true;
+    mNumStageVehicleChars++;
+}
+
+void MissionStage::ApplyStageVehicleCharacters()
+{
+    Mission* currMission = GetGameplayManager() ? GetGameplayManager()->GetCurrentMission() : NULL;
+    for ( int i = 0; i < mNumStageVehicleChars; ++i )
+    {
+        StageVehicleCharInfo& info = mStageVehicleChars[i];
+        bool isCurrent = ( strcmp( info.vehicleName, "current" ) == 0 );
+        Vehicle* vehicle = isCurrent ?
+            GetGameplayManager()->GetCurrentVehicle() :
+            GetGameplayManager()->GetMissionVehicleByName( info.vehicleName );
+        if ( vehicle == NULL && !isCurrent )
+        {
+            vehicle = GetVehicleCentral()->GetVehicleByName( info.vehicleName );
+        }
+
+        if ( info.remove )
+        {
+            Character* ch = GetCharacterManager()->GetCharacterByName( info.charName );
+            if ( ch != NULL )
+            {
+                if ( vehicle != NULL && vehicle->GetDriver() == ch )
+                {
+                    vehicle->SetDriver( NULL );
+                }
+                ch->SetTargetVehicle( NULL );
+                if ( !ch->IsAmbient() )
+                {
+                    GetCharacterManager()->RemoveCharacter( ch );
+                }
+            }
+            if ( currMission != NULL )
+            {
+                currMission->UnregisterStageVehicleCharacter( info.charName );
+            }
+        }
+        else if ( vehicle != NULL )
+        {
+            Character* ch = GetCharacterManager()->GetCharacterByName( info.charName );
+            if ( ch == NULL )
+            {
+                ch = GetCharacterManager()->AddCharacter( CharacterManager::NPC, info.charName, info.charName, "npd", NULL );
+            }
+            if ( ch != NULL )
+            {
+                if ( ch->IsNPC() )
+                {
+                    static_cast<NPCController*>( ch->GetController() )->TransitToState( NPCController::NONE );
+                }
+                bool hadDriver = vehicle->HasDriver();
+                bool tempPhantom = ( isCurrent && !hadDriver );
+                if ( tempPhantom )
+                {
+                    vehicle->SetPhantomDriver( true );
+                }
+                ch->SetTargetVehicle( vehicle );
+                ch->AddToWorldScene();
+                ch->GetStateManager()->SetState<CharacterAi::InCar>();
+                if ( tempPhantom )
+                {
+                    vehicle->SetPhantomDriver( false );
+                }
+                else if ( !hadDriver && !isCurrent )
+                {
+                    vehicle->SetDriver( ch );
+                    ch->SetRole( Character::ROLE_DRIVER );
+                }
+                if ( currMission != NULL )
+                {
+                    currMission->RegisterStageVehicleCharacter( info.charName );
+                }
+            }
+        }
+    }
+}
+
+void MissionStage::SetCheckpointVehicleRestart( CarStartLocator* loc )
+{
+    tRefCounted::Assign( mpCheckpointVehicleRestart, loc );
+}
+
+void MissionStage::SetCheckpointPlayerRestart( Locator* loc )
+{
+    tRefCounted::Assign( mpCheckpointPlayerRestart, loc );
+}
+
+void MissionStage::SetCheckpointDynaLoadData( const char* data )
+{
+    if ( data != NULL )
+    {
+        strncpy( mCheckpointDynaLoadData, data, sizeof( mCheckpointDynaLoadData ) - 1 );
+        mCheckpointDynaLoadData[ sizeof( mCheckpointDynaLoadData ) - 1 ] = '\0';
+    }
+}
+
+void MissionStage::SetStageCharacterModel( const char* model )
+{
+    if ( model != NULL )
+    {
+        strncpy( mStageCharacterModel, model, sizeof( mStageCharacterModel ) - 1 );
+        mStageCharacterModel[ sizeof( mStageCharacterModel ) - 1 ] = '\0';
+    }
+}
+
+void MissionStage::SetStageVehicleReset( const char* vehicleName )
+{
+    if ( vehicleName != NULL )
+    {
+        strncpy( mStageVehicleResetName, vehicleName, sizeof( mStageVehicleResetName ) - 1 );
+        mStageVehicleResetName[ sizeof( mStageVehicleResetName ) - 1 ] = '\0';
+    }
 }
 
 

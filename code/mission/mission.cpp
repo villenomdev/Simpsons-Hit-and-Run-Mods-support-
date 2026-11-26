@@ -143,7 +143,8 @@ Mission::Mission() :
     mDoorStars( NULL ),
     mInitPedGroupId( 0 ),
     mShowHUD( true ),
-    mNumValidFailureHints( -1 )
+    mNumValidFailureHints( -1 ),
+    mNumStageVehicleCharNames( 0 )
 {
     strcpy( mcName, "" );
     mbCarryOverOutOfCarCondition = false;
@@ -486,6 +487,27 @@ void Mission::Finalize()
     //This is a safety catch
     GetEventManager()->RemoveAll( this );
 
+    for ( int sc = 0; sc < mNumStageVehicleCharNames; ++sc )
+    {
+        if ( mStageVehicleCharNames[ sc ][ 0 ] != '\0' )
+        {
+            Character* ch = GetCharacterManager()->GetCharacterByName( mStageVehicleCharNames[ sc ] );
+            if ( ch != NULL )
+            {
+                if ( ch->GetTargetVehicle() != NULL && ch->GetTargetVehicle()->GetDriver() == ch )
+                {
+                    ch->GetTargetVehicle()->SetDriver( NULL );
+                }
+                ch->SetTargetVehicle( NULL );
+                if ( !ch->IsAmbient() )
+                {
+                    GetCharacterManager()->RemoveCharacter( ch );
+                }
+            }
+        }
+    }
+    mNumStageVehicleCharNames = 0;
+
     //
     // TODO: Dump all the mission vehicles (player & AI)
     //
@@ -698,6 +720,27 @@ void Mission::SetToStage( int index, bool resetting )
         // greg
         // jan 10, 2003
         
+        if( !resetting && stage->IsCheckpoint() )
+        {
+            mResetToStage = index;
+            if( stage->GetCheckpointVehicleRestart() != NULL )
+            {
+                SetVehicleRestart( stage->GetCheckpointVehicleRestart() );
+            }
+            if( stage->GetCheckpointPlayerRestart() != NULL )
+            {
+                SetPlayerRestart( stage->GetCheckpointPlayerRestart() );
+            }
+            if( stage->GetCheckpointDynaLoadData()[0] != '\0' )
+            {
+                SetRestartDynaload( stage->GetCheckpointDynaLoadData() );
+            }
+            if( stage->GetCheckpointPedGroup() >= 0 )
+            {
+                SetInitPedGroup( stage->GetCheckpointPedGroup() );
+            }
+        }
+
         // loop through up to and including this stage and
         // re-initialize the vehicle stuff
         if(resetting)
@@ -1924,6 +1967,42 @@ void Mission::DoStageChange()
 void Mission::SetSwappedCarsFlag(bool flag)
 {
     mbSwappedCars = flag;
+}
+
+void Mission::RegisterStageVehicleCharacter( const char* charName )
+{
+    if ( charName == NULL || charName[ 0 ] == '\0' )
+    {
+        return;
+    }
+    for ( int i = 0; i < mNumStageVehicleCharNames; ++i )
+    {
+        if ( strcmp( mStageVehicleCharNames[ i ], charName ) == 0 )
+        {
+            return;
+        }
+    }
+    if ( mNumStageVehicleCharNames < MAX_MISSION_STAGE_VEHICLE_CHARS )
+    {
+        strncpy( mStageVehicleCharNames[ mNumStageVehicleCharNames ], charName, 31 );
+        mStageVehicleCharNames[ mNumStageVehicleCharNames ][ 31 ] = '\0';
+        mNumStageVehicleCharNames++;
+    }
+}
+
+void Mission::UnregisterStageVehicleCharacter( const char* charName )
+{
+    if ( charName == NULL )
+    {
+        return;
+    }
+    for ( int i = 0; i < mNumStageVehicleCharNames; ++i )
+    {
+        if ( strcmp( mStageVehicleCharNames[ i ], charName ) == 0 )
+        {
+            mStageVehicleCharNames[ i ][ 0 ] = '\0';
+        }
+    }
 }
 
 
