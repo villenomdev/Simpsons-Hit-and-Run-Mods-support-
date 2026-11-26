@@ -76,15 +76,12 @@ If a PC mod still fails, crashes, or behaves unexpectedly, check `gamelog.txt` �
 
 ---
 
-## 🎮 Additional Documentation
+## 🕹️ How to Enable Mods In-Game
 
-* 📥 [Installation Notes (Legacy Reference)](INSTALLATION.md)
-* 📱 [Touch Controls](TOUCH_CONTROLS.md)
-* 🎮 [Controller Controls](CONTROLLER_CONTROLS.md)
-* 📊 [Port Features](FEATURES.md)
-* ⚠ [Known Issues](KNOWN_ISSUES.md)
-* 📌 [Changelog](CHANGELOG.md)
-* 🎯 [Cheats](CHEATS.md)
+1. Launch the game.
+2. Go to **Options** → **Mods**.
+3. You will see a list of all available mods found inside `/storage/emulated/0/Simpsons Hit and Run/mods/`.
+4. Enable the mod you want, then **close and reopen the game** so the mod loads completely.
 
 ---
 
